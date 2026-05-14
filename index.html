@@ -1059,29 +1059,72 @@
       }
 
       // ============================================================================
-      //  MAP PANEL — Maps Embed API iframe
+      //  MAP PANEL — Maps Static API (flat image, no UI chrome)
       // ============================================================================
       /**
-       * Maps Embed API is free, unlimited, and browser-side — no proxy needed.
-       * It uses the existing referrer-restricted API key directly.
+       * Maps Static API returns a flat PNG with no overlay UI — no address card,
+       * no duration ribbons, no zoom controls. Just the map.
        *
-       *  - If we have an origin postcode → "directions" mode shows the full route
-       *  - Otherwise → "place" mode shows just the event location pin
+       *  - If we have an origin postcode → two markers + a straight line between
+       *    them. Map auto-zooms to include both.
+       *  - Otherwise → a single marker on the event location.
        *
-       * Docs: https://developers.google.com/maps/documentation/embed/embedding-map
+       * Styling: muted greens/creams to match the app aesthetic. The `style=`
+       * params are URL-encoded styling rules from Google's Maps Static API.
+       * Docs: https://developers.google.com/maps/documentation/maps-static/styling
        */
       function MapPanel({ originLabel }) {
         const hasOrigin = originLabel && originLabel.trim().length > 0;
 
-        const src = hasOrigin
-          ? "https://www.google.com/maps/embed/v1/directions" +
-            "?key=" + GOOGLE_API_KEY +
-            "&origin=" + encodeURIComponent(originLabel + ", UK") +
-            "&destination=" + encodeURIComponent(EVENT_LOCATION) +
-            "&mode=driving"
-          : "https://www.google.com/maps/embed/v1/place" +
-            "?key=" + GOOGLE_API_KEY +
-            "&q=" + encodeURIComponent(EVENT_LOCATION);
+        // Custom map style: soft, muted, matches our cream/green palette.
+        const mapStyle = [
+          "feature:all|element:labels.text.fill|color:0x5a6650",
+          "feature:all|element:labels.text.stroke|color:0xf5f1e8|weight:2",
+          "feature:landscape|color:0xefe8d3",
+          "feature:water|color:0xc8d4cc",
+          "feature:road|element:geometry|color:0xffffff",
+          "feature:road|element:labels|visibility:simplified",
+          "feature:poi|visibility:off",
+          "feature:transit|visibility:off",
+          "feature:administrative|element:geometry.stroke|color:0xd6cfb8",
+        ];
+        const styleParams = mapStyle
+          .map((s) => "&style=" + encodeURIComponent(s))
+          .join("");
+
+        // Markers — green dots, no labels.
+        const destMarker =
+          "color:0x3d5a2a|" + encodeURIComponent(EVENT_LOCATION);
+
+        let src;
+        if (hasOrigin) {
+          const origin = originLabel + ", UK";
+          const originMarker =
+            "color:0x3d5a2a|" + encodeURIComponent(origin);
+
+          // Straight line between origin and destination.
+          const path =
+            "color:0x3d5a2aff|weight:4|geodesic:true|" +
+            encodeURIComponent(origin) +
+            "|" +
+            encodeURIComponent(EVENT_LOCATION);
+
+          src =
+            "https://maps.googleapis.com/maps/api/staticmap" +
+            "?size=600x300&scale=2" +
+            "&markers=" + originMarker +
+            "&markers=" + destMarker +
+            "&path=" + path +
+            styleParams +
+            "&key=" + GOOGLE_API_KEY;
+        } else {
+          src =
+            "https://maps.googleapis.com/maps/api/staticmap" +
+            "?size=600x300&scale=2&zoom=12" +
+            "&markers=" + destMarker +
+            styleParams +
+            "&key=" + GOOGLE_API_KEY;
+        }
 
         return (
           <div
@@ -1092,31 +1135,11 @@
                 "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
             }}
           >
-            <div className="px-5 pt-5 pb-3">
-              <p
-                className="text-xs uppercase tracking-widest"
-                style={{ color: "#8a9070" }}
-              >
-                {hasOrigin ? "Your route" : "Event location"}
-              </p>
-              {hasOrigin && (
-                <p
-                  className="mt-1 text-sm"
-                  style={{ color: "#5a6650" }}
-                >
-                  {originLabel} → {EVENT_LOCATION}
-                </p>
-              )}
-            </div>
-            <iframe
-              title="Map"
+            <img
               src={src}
-              width="100%"
-              height="240"
-              style={{ border: 0, display: "block" }}
+              alt={hasOrigin ? "Route map" : "Event location map"}
+              style={{ display: "block", width: "100%", height: "auto" }}
               loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
             />
           </div>
         );
