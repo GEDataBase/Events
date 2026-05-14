@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f5f1e8" />
+    <title>Footprint — Carbon Calculator</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind via CDN (fine for a one-day event; not for high-traffic production) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React + ReactDOM + Babel (so we can write JSX directly in the page) -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f5f1e8;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      /* Hide number input spinners */
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fadeIn {
+        animation: fadeUp 0.4s ease backwards;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spinner {
+        animation: spin 0.8s linear infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+      /**
+       * ============================================================================
+       *  CARBON CALCULATOR — STAGES 1 & 2
+       * ----------------------------------------------------------------------------
+       *  Stage 1: travel mode + manual distance + occupancy + results.
+       *  Stage 2: postcode lookup via Google Distance Matrix API.
+       *
+       *  CONFIGURATION — edit the constants below.
+       * ============================================================================
+       */
+
+      // ---- CONFIGURATION ---------------------------------------------------
+      // TODO: replace with the actual event venue once Shivi confirms.
+      // Accepts a full address, postcode, or "lat,lng" string.
+      const EVENT_LOCATION = "EX39 5AP"; // placeholder
+
+      // TODO: paste your Google Maps Platform API key here.
+      // 1. Create a Google Cloud project (console.cloud.google.com).
+      // 2. Enable "Distance Matrix API" (and later "Maps Embed API" for stage 3).
+      // 3. Create an API key under APIs & Services → Credentials.
+      // 4. RESTRICT IT: HTTP referrers → add "https://<yourname>.github.io/*"
+      //    and "http://localhost:*" for testing. Also restrict by API to just
+      //    Distance Matrix (+ Maps Embed in stage 3).
+      // 5. Paste it below.
+      const GOOGLE_API_KEY = "PASTE_YOUR_KEY_HERE";
+
+      const DEFAULT_UNIT = "miles"; // "miles" or "km"
+
+      // ---- EMISSIONS FACTORS -----------------------------------------------
+      /**
+       * All factors are kg CO2e per km (or per passenger-km for shared modes).
+       * Sourced from UK Government (DEFRA / DESNZ) 2024 Greenhouse Gas Conversion
+       * Factors for Company Reporting — published 8 July 2024, updated 30 Oct 2024.
+       * https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2024
+       *
+       *   CAR_AVG       0.17  kg CO2e/km   "Average car" (unknown size/fuel).
+       *                                    Whole-vehicle figure — divide by
+       *                                    occupancy for per-person.
+       *   MOTORBIKE_AVG 0.11  kg CO2e/km   "Average motorbike".
+       *   BUS_AVG       0.10  kg CO2e/passenger-km   "Local bus (not London)".
+       *   RAIL_AVG      0.035 kg CO2e/passenger-km   "National rail" UK average
+       *                                    (DEFRA 2024 exact value: 0.03546).
+       *   CYCLE/WALK    0     Direct emissions only.
+       *
+       * Please cross-check against the official "condensed set" spreadsheet
+       * before going live in case of minor updates.
+       */
+      const EMISSIONS_FACTORS = {
+        car: 0.17,
+        motorbike: 0.11,
+        publicTransport: 0.07, // average of bus (0.10) and rail (0.035)
+        cycleWalk: 0,
+      };
+
+      const MILES_TO_KM = 1.60934;
+
+      // ---- RELATABLE EQUIVALENTS -------------------------------------------
+      /**
+       * Sanity-checked figures:
+       *  - Coffee (filter, with milk): ~0.21 kg CO2e (Berners-Lee, 2020)
+       *  - Smartphone full charge: ~0.005 kg CO2e
+       *  - 1 hour Netflix HD: ~0.055 kg CO2e (IEA / Carbon Trust 2021 revised)
+       */
+      const EQUIVALENTS = [
+        { label: "cups of coffee ☕", perKg: 1 / 0.21 },
+        { label: "phone charges 🔋", perKg: 1 / 0.005 },
+        { label: "hours of Netflix 📺", perKg: 1 / 0.055 },
+      ];
+
+      function pickEquivalent(kg) {
+        const candidates = EQUIVALENTS.map((e) => ({
+          ...e,
+          count: Math.round(kg * e.perKg),
+        }));
+        const inRange = candidates.find((c) => c.count >= 1 && c.count <= 500);
+        return inRange || candidates[0];
+      }
+
+      // ---- TRAVEL MODES ----------------------------------------------------
+      const TRAVEL_MODES = [
+        {
+          id: "car",
+          label: "Car",
+          emoji: "🚗",
+          sublabel: "Petrol, diesel, or hybrid",
+          needsOccupancy: true,
+        },
+        {
+          id: "motorbike",
+          label: "Motorbike",
+          emoji: "🏍️",
+          sublabel: "Or scooter",
+          needsOccupancy: true,
+        },
+        {
+          id: "publicTransport",
+          label: "Public transport",
+          emoji: "🚆",
+          sublabel: "Bus or train",
+          needsOccupancy: false,
+        },
+        {
+          id: "cycleWalk",
+          label: "Cycle or walk",
+          emoji: "🚴",
+          sublabel: "Zero emissions, hero",
+          needsOccupancy: false,
+        },
+      ];
+
+      // ---- UK POSTCODE VALIDATION -----------------------------------------
+      // Permissive regex — accepts with or without space, case-insensitive.
+      const UK_POSTCODE_REGEX =
+        /^([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(([A-Za-z][0-9][A-Za-z])|([A-Za-z][A-Ha-hJ-Yj-y][0-9]?[A-Za-z])))) ?[0-9][A-Za-z]{2})$/;
+
+      function isValidUKPostcode(pc) {
+        if (!pc) return false;
+        return UK_POSTCODE_REGEX.test(pc.trim());
+      }
+
+      // ---- GOOGLE DISTANCE MATRIX CALL ------------------------------------
+      /**
+       * Returns distance in metres + a human-readable string, or throws.
+       * Direct browser fetch — relies on HTTP referrer restriction on the key.
+       *
+       * Note: Distance Matrix API has a CORS quirk — Google's docs recommend
+       * server-side calls. For a small event with referrer-restricted keys this
+       * usually works fine, but if you hit CORS errors in production we'll need
+       * a tiny proxy (Cloudflare Worker or Apps Script does it in ~10 lines).
+       */
+      async function fetchDrivingDistance(originPostcode, destination) {
+        const origin = encodeURIComponent(originPostcode + ", UK");
+        const dest = encodeURIComponent(destination);
+        const url =
+          "https://maps.googleapis.com/maps/api/distancematrix/json" +
+          `?origins=${origin}&destinations=${dest}` +
+          `&mode=driving&units=metric&region=uk&key=${GOOGLE_API_KEY}`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Network error contacting Google");
+
+        const data = await res.json();
+        if (data.status !== "OK") {
+          throw new Error(
+            `Google API error: ${data.status}${data.error_message ? " — " + data.error_message : ""}`,
+          );
+        }
+
+        const element = data.rows?.[0]?.elements?.[0];
+        if (!element || element.status !== "OK") {
+          throw new Error(
+            "Couldn't find a driving route between those two places. Double-check the postcode?",
+          );
+        }
+
+        return {
+          meters: element.distance.value,
+          text: element.distance.text, // e.g. "42.3 km"
+          durationText: element.duration.text,
+        };
+      }
+
+      // ============================================================================
+      //  MAIN COMPONENT
+      // ============================================================================
+      function CarbonCalculator() {
+        const [screen, setScreen] = React.useState("mode");
+        const [mode, setMode] = React.useState(null);
+
+        // Distance state — can be set manually OR via postcode lookup
+        const [distanceKm, setDistanceKm] = React.useState(null);
+        const [distanceLabel, setDistanceLabel] = React.useState(""); // e.g. "42.3 km" or "26 miles"
+        const [originLabel, setOriginLabel] = React.useState(""); // for results screen ("from EX39 5AP")
+
+        const [occupancy, setOccupancy] = React.useState(1);
+
+        const modeConfig = TRAVEL_MODES.find((m) => m.id === mode);
+
+        const selectMode = (id) => {
+          setMode(id);
+          setScreen("distance");
+        };
+
+        const handleDistanceSubmit = ({ km, label, origin }) => {
+          setDistanceKm(km);
+          setDistanceLabel(label);
+          setOriginLabel(origin || "");
+          if (modeConfig?.needsOccupancy) {
+            setScreen("occupancy");
+          } else {
+            setScreen("results");
+          }
+          // re-read modeConfig because state hasn't flushed yet — use the id
+          const m = TRAVEL_MODES.find((x) => x.id === mode);
+          if (!m?.needsOccupancy) setScreen("results");
+        };
+
+        const restart = () => {
+          setMode(null);
+          setDistanceKm(null);
+          setDistanceLabel("");
+          setOriginLabel("");
+          setOccupancy(1);
+          setScreen("mode");
+        };
+
+        // Calculation
+        const factor = mode ? EMISSIONS_FACTORS[mode] : 0;
+        const totalKg = (distanceKm || 0) * factor;
+        const perPersonKg = modeConfig?.needsOccupancy
+          ? totalKg / occupancy
+          : totalKg;
+
+        // Progress indicator
+        const totalSteps = modeConfig?.needsOccupancy ? 4 : 3;
+        const stepLabels = {
+          mode: 1,
+          distance: 2,
+          occupancy: 3,
+          results: totalSteps,
+        };
+        const currentStep = stepLabels[screen];
+
+        return (
+          <div
+            style={{
+              minHeight: "100vh",
+              backgroundColor: "#f5f1e8",
+              color: "#1e2a1e",
+            }}
+          >
+            {/* Decorative top fade */}
+            <div
+              style={{
+                position: "fixed",
+                inset: "0 0 auto 0",
+                height: "8rem",
+                background:
+                  "linear-gradient(to bottom, #e8e0cc, transparent)",
+                pointerEvents: "none",
+              }}
+            />
+
+            <div className="relative mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10 pt-6">
+              {/* Header */}
+              <header className="mb-8 flex items-center justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl">🌱</span>
+                  <span
+                    className="text-lg tracking-tight"
+                    style={{
+                      fontFamily: "'Fraunces', Georgia, serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Footprint
+                  </span>
+                </div>
+                <div
+                  className="flex items-center gap-2 text-xs uppercase tracking-widest"
+                  style={{ color: "#6b7a4f" }}
+                >
+                  <span>
+                    Step {currentStep} of {totalSteps}
+                  </span>
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalSteps }).map((_, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          height: 6,
+                          width: 16,
+                          borderRadius: 9999,
+                          backgroundColor:
+                            i < currentStep ? "#3d5a2a" : "#d6cfb8",
+                          transition: "background-color 0.3s",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </header>
+
+              <main className="flex-1">
+                {screen === "mode" && <ScreenMode onSelect={selectMode} />}
+                {screen === "distance" && (
+                  <ScreenDistance
+                    onBack={() => setScreen("mode")}
+                    onSubmit={handleDistanceSubmit}
+                    modeLabel={modeConfig?.label}
+                  />
+                )}
+                {screen === "occupancy" && (
+                  <ScreenOccupancy
+                    occupancy={occupancy}
+                    setOccupancy={setOccupancy}
+                    onBack={() => setScreen("distance")}
+                    onSubmit={() => setScreen("results")}
+                  />
+                )}
+                {screen === "results" && (
+                  <ScreenResults
+                    modeLabel={modeConfig?.label}
+                    totalKg={totalKg}
+                    perPersonKg={perPersonKg}
+                    occupancy={occupancy}
+                    needsOccupancy={modeConfig?.needsOccupancy}
+                    distanceLabel={distanceLabel}
+                    originLabel={originLabel}
+                    onRestart={restart}
+                  />
+                )}
+              </main>
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SCREEN 1 — travel mode cards
+      // ============================================================================
+      function ScreenMode({ onSelect }) {
+        return (
+          <div className="animate-fadeIn">
+            <h1
+              className="mb-2 text-3xl leading-tight"
+              style={{
+                fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 600,
+              }}
+            >
+              How did you get here?
+            </h1>
+            <p
+              className="mb-7 text-[15px]"
+              style={{ color: "#5a6650" }}
+            >
+              Tap your mode of transport to begin.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              {TRAVEL_MODES.map((m, idx) => (
+                <button
+                  key={m.id}
+                  onClick={() => onSelect(m.id)}
+                  className="group relative flex aspect-square flex-col items-start justify-between rounded-2xl p-4 text-left transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    boxShadow:
+                      "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+                    animation: `fadeUp 0.4s ease ${idx * 60}ms backwards`,
+                  }}
+                >
+                  <span
+                    className="text-5xl transition-transform group-hover:scale-110 group-hover:-rotate-3"
+                  >
+                    {m.emoji}
+                  </span>
+                  <div>
+                    <div
+                      className="text-[17px] leading-tight"
+                      style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {m.label}
+                    </div>
+                    <div
+                      className="mt-0.5 text-[11px] uppercase tracking-wider"
+                      style={{ color: "#6b7a4f" }}
+                    >
+                      {m.sublabel}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SCREEN 2 — distance entry (now with postcode tab)
+      // ============================================================================
+      function ScreenDistance({ onBack, onSubmit, modeLabel }) {
+        const [tab, setTab] = React.useState("manual"); // "manual" | "postcode"
+
+        // Manual entry state
+        const [distance, setDistance] = React.useState("");
+        const [unit, setUnit] = React.useState(DEFAULT_UNIT);
+
+        // Postcode entry state
+        const [postcode, setPostcode] = React.useState("");
+        const [loading, setLoading] = React.useState(false);
+        const [error, setError] = React.useState(null);
+
+        const canSubmitManual = distance && Number(distance) > 0;
+        const canSubmitPostcode = isValidUKPostcode(postcode);
+
+        const submitManual = () => {
+          if (!canSubmitManual) return;
+          const km =
+            unit === "miles"
+              ? Number(distance) * MILES_TO_KM
+              : Number(distance);
+          onSubmit({
+            km,
+            label: `${distance} ${unit}`,
+            origin: "",
+          });
+        };
+
+        const submitPostcode = async () => {
+          if (!canSubmitPostcode) return;
+          setLoading(true);
+          setError(null);
+          try {
+            const result = await fetchDrivingDistance(
+              postcode,
+              EVENT_LOCATION,
+            );
+            onSubmit({
+              km: result.meters / 1000,
+              label: result.text,
+              origin: postcode.toUpperCase().trim(),
+            });
+          } catch (e) {
+            setError(e.message || "Something went wrong. Try again?");
+            setLoading(false);
+          }
+        };
+
+        return (
+          <div className="animate-fadeIn">
+            <button
+              onClick={onBack}
+              className="mb-4 text-sm"
+              style={{ color: "#6b7a4f" }}
+            >
+              ← Back
+            </button>
+
+            <h1
+              className="mb-2 text-3xl leading-tight"
+              style={{
+                fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 600,
+              }}
+            >
+              Where did you come from?
+            </h1>
+            <p className="mb-6 text-[15px]" style={{ color: "#5a6650" }}>
+              <span style={{ color: "#3d5a2a" }}>({modeLabel})</span>
+            </p>
+
+            {/* Tab switcher */}
+            <div
+              className="mb-6 inline-flex rounded-full p-1"
+              style={{ backgroundColor: "#e8e0cc" }}
+            >
+              <button
+                onClick={() => {
+                  setTab("postcode");
+                  setError(null);
+                }}
+                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                style={{
+                  backgroundColor:
+                    tab === "postcode" ? "#3d5a2a" : "transparent",
+                  color: tab === "postcode" ? "#ffffff" : "#5a6650",
+                  boxShadow:
+                    tab === "postcode"
+                      ? "0 1px 2px rgba(0,0,0,0.08)"
+                      : "none",
+                }}
+              >
+                Use my postcode
+              </button>
+              <button
+                onClick={() => {
+                  setTab("manual");
+                  setError(null);
+                }}
+                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                style={{
+                  backgroundColor:
+                    tab === "manual" ? "#3d5a2a" : "transparent",
+                  color: tab === "manual" ? "#ffffff" : "#5a6650",
+                  boxShadow:
+                    tab === "manual"
+                      ? "0 1px 2px rgba(0,0,0,0.08)"
+                      : "none",
+                }}
+              >
+                I know my distance
+              </button>
+            </div>
+
+            {/* ----- POSTCODE TAB ----- */}
+            {tab === "postcode" && (
+              <div className="animate-fadeIn">
+                <div className="mb-6">
+                  <label
+                    className="mb-2 block text-xs uppercase tracking-widest"
+                    style={{ color: "#8a9070" }}
+                  >
+                    Your postcode
+                  </label>
+                  <div
+                    className="flex items-baseline gap-3 pb-3"
+                    style={{ borderBottom: "2px solid #3d5a2a" }}
+                  >
+                    <input
+                      type="text"
+                      value={postcode}
+                      onChange={(e) =>
+                        setPostcode(e.target.value.toUpperCase())
+                      }
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && submitPostcode()
+                      }
+                      placeholder="e.g. EX39 5AP"
+                      autoComplete="postal-code"
+                      autoCapitalize="characters"
+                      className="w-full bg-transparent text-4xl font-light outline-none"
+                      style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        color: "#1e2a1e",
+                        letterSpacing: "0.02em",
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <p
+                    className="mt-3 text-xs"
+                    style={{ color: "#8a9070" }}
+                  >
+                    🗺️ We'll calculate the driving distance to the event.
+                  </p>
+                </div>
+
+                {error && (
+                  <div
+                    className="mb-4 rounded-2xl p-4 text-sm"
+                    style={{
+                      backgroundColor: "#fbe8e0",
+                      color: "#7a3520",
+                      border: "1px solid #f0c8b8",
+                    }}
+                  >
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={submitPostcode}
+                  disabled={!canSubmitPostcode || loading}
+                  className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
+                  style={{
+                    backgroundColor:
+                      canSubmitPostcode && !loading
+                        ? "#3d5a2a"
+                        : "#d6cfb8",
+                    color:
+                      canSubmitPostcode && !loading
+                        ? "#ffffff"
+                        : "#8a9070",
+                    cursor:
+                      canSubmitPostcode && !loading
+                        ? "pointer"
+                        : "not-allowed",
+                    boxShadow:
+                      canSubmitPostcode && !loading
+                        ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
+                        : "none",
+                  }}
+                >
+                  {loading ? (
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <span
+                        className="spinner inline-block"
+                        style={{
+                          width: 16,
+                          height: 16,
+                          border: "2px solid rgba(255,255,255,0.3)",
+                          borderTopColor: "#ffffff",
+                          borderRadius: "50%",
+                        }}
+                      />
+                      Calculating…
+                    </span>
+                  ) : (
+                    <>Continue →</>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* ----- MANUAL ENTRY TAB ----- */}
+            {tab === "manual" && (
+              <div className="animate-fadeIn">
+                <div
+                  className="mb-6 inline-flex rounded-full p-1"
+                  style={{ backgroundColor: "#e8e0cc" }}
+                >
+                  <button
+                    onClick={() => setUnit("miles")}
+                    className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                    style={{
+                      backgroundColor:
+                        unit === "miles" ? "#3d5a2a" : "transparent",
+                      color: unit === "miles" ? "#ffffff" : "#5a6650",
+                      boxShadow:
+                        unit === "miles"
+                          ? "0 1px 2px rgba(0,0,0,0.08)"
+                          : "none",
+                    }}
+                  >
+                    Miles
+                  </button>
+                  <button
+                    onClick={() => setUnit("km")}
+                    className="rounded-full px-5 py-2 text-sm font-medium transition-all"
+                    style={{
+                      backgroundColor:
+                        unit === "km" ? "#3d5a2a" : "transparent",
+                      color: unit === "km" ? "#ffffff" : "#5a6650",
+                      boxShadow:
+                        unit === "km"
+                          ? "0 1px 2px rgba(0,0,0,0.08)"
+                          : "none",
+                    }}
+                  >
+                    Kilometres
+                  </button>
+                </div>
+
+                <div className="mb-8">
+                  <div
+                    className="flex items-baseline gap-3 pb-3"
+                    style={{ borderBottom: "2px solid #3d5a2a" }}
+                  >
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={distance}
+                      onChange={(e) => setDistance(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && submitManual()}
+                      placeholder="0"
+                      className="w-full bg-transparent text-5xl font-light outline-none"
+                      style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        color: "#1e2a1e",
+                      }}
+                      autoFocus
+                    />
+                    <span className="text-lg" style={{ color: "#6b7a4f" }}>
+                      {unit}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={submitManual}
+                  disabled={!canSubmitManual}
+                  className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
+                  style={{
+                    backgroundColor: canSubmitManual
+                      ? "#3d5a2a"
+                      : "#d6cfb8",
+                    color: canSubmitManual ? "#ffffff" : "#8a9070",
+                    cursor: canSubmitManual ? "pointer" : "not-allowed",
+                    boxShadow: canSubmitManual
+                      ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
+                      : "none",
+                  }}
+                >
+                  Continue →
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SCREEN 3 — occupancy
+      // ============================================================================
+      function ScreenOccupancy({ occupancy, setOccupancy, onBack, onSubmit }) {
+        const dec = () => setOccupancy(Math.max(1, occupancy - 1));
+        const inc = () => setOccupancy(Math.min(8, occupancy + 1));
+
+        return (
+          <div className="animate-fadeIn">
+            <button
+              onClick={onBack}
+              className="mb-4 text-sm"
+              style={{ color: "#6b7a4f" }}
+            >
+              ← Back
+            </button>
+
+            <h1
+              className="mb-2 text-3xl leading-tight"
+              style={{
+                fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 600,
+              }}
+            >
+              How many of you?
+            </h1>
+            <p
+              className="mb-10 text-[15px]"
+              style={{ color: "#5a6650" }}
+            >
+              Including yourself. We'll split the emissions evenly.
+            </p>
+
+            <div
+              className="mb-10 flex items-center justify-between rounded-3xl p-6"
+              style={{
+                backgroundColor: "#ffffff",
+                boxShadow:
+                  "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+              }}
+            >
+              <button
+                onClick={dec}
+                disabled={occupancy <= 1}
+                className="flex h-16 w-16 items-center justify-center rounded-full text-3xl transition-all active:scale-95"
+                style={{
+                  backgroundColor: "#e8e0cc",
+                  color: "#3d5a2a",
+                  opacity: occupancy <= 1 ? 0.4 : 1,
+                  cursor: occupancy <= 1 ? "not-allowed" : "pointer",
+                }}
+              >
+                −
+              </button>
+              <div className="text-center">
+                <div
+                  className="text-7xl leading-none"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                    color: "#3d5a2a",
+                  }}
+                >
+                  {occupancy}
+                </div>
+                <div
+                  className="mt-1 text-xs uppercase tracking-widest"
+                  style={{ color: "#8a9070" }}
+                >
+                  {occupancy === 1 ? "person" : "people"}
+                </div>
+              </div>
+              <button
+                onClick={inc}
+                disabled={occupancy >= 8}
+                className="flex h-16 w-16 items-center justify-center rounded-full text-3xl transition-all active:scale-95"
+                style={{
+                  backgroundColor: "#e8e0cc",
+                  color: "#3d5a2a",
+                  opacity: occupancy >= 8 ? 0.4 : 1,
+                  cursor: occupancy >= 8 ? "not-allowed" : "pointer",
+                }}
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              onClick={onSubmit}
+              className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
+              style={{
+                backgroundColor: "#3d5a2a",
+                color: "#ffffff",
+                boxShadow: "0 10px 25px -8px rgba(61, 90, 42, 0.4)",
+              }}
+            >
+              See my footprint →
+            </button>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SCREEN 4 — results
+      // ============================================================================
+      function ScreenResults({
+        modeLabel,
+        totalKg,
+        perPersonKg,
+        occupancy,
+        needsOccupancy,
+        distanceLabel,
+        originLabel,
+        onRestart,
+      }) {
+        const equivalent = pickEquivalent(perPersonKg);
+        const isZero = perPersonKg < 0.001;
+
+        return (
+          <div className="animate-fadeIn">
+            {isZero ? (
+              <>
+                <h1
+                  className="mb-2 text-3xl leading-tight"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                  }}
+                >
+                  Zero emissions. Legend.
+                </h1>
+                <p
+                  className="mb-8 text-[15px]"
+                  style={{ color: "#5a6650" }}
+                >
+                  You travelled {distanceLabel} by {modeLabel?.toLowerCase()}{" "}
+                  — no CO₂ at all.
+                </p>
+              </>
+            ) : (
+              <>
+                <p
+                  className="mb-2 text-xs uppercase tracking-widest"
+                  style={{ color: "#6b7a4f" }}
+                >
+                  Your journey
+                </p>
+                <h1
+                  className="mb-1 text-3xl leading-tight"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                  }}
+                >
+                  {perPersonKg.toFixed(2)}{" "}
+                  <span className="text-xl" style={{ color: "#6b7a4f" }}>
+                    kg CO₂e
+                  </span>
+                </h1>
+                <p className="mb-8 text-sm" style={{ color: "#5a6650" }}>
+                  per person, {distanceLabel}
+                  {originLabel && ` from ${originLabel}`} by{" "}
+                  {modeLabel?.toLowerCase()}
+                </p>
+              </>
+            )}
+
+            {!isZero && (
+              <div
+                className="mb-4 rounded-3xl p-6"
+                style={{
+                  backgroundColor: "#ffffff",
+                  boxShadow:
+                    "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+                }}
+              >
+                <div className="mb-5 flex items-start justify-between">
+                  <div>
+                    <p
+                      className="text-xs uppercase tracking-widest"
+                      style={{ color: "#8a9070" }}
+                    >
+                      Total
+                    </p>
+                    <p
+                      className="mt-1 text-3xl leading-none"
+                      style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {totalKg.toFixed(2)}{" "}
+                      <span
+                        className="text-base"
+                        style={{ color: "#6b7a4f" }}
+                      >
+                        kg
+                      </span>
+                    </p>
+                  </div>
+                  {needsOccupancy && (
+                    <div className="text-right">
+                      <p
+                        className="text-xs uppercase tracking-widest"
+                        style={{ color: "#8a9070" }}
+                      >
+                        Per person
+                      </p>
+                      <p
+                        className="mt-1 text-3xl leading-none"
+                        style={{
+                          fontFamily: "'Fraunces', Georgia, serif",
+                          fontWeight: 600,
+                          color: "#3d5a2a",
+                        }}
+                      >
+                        {perPersonKg.toFixed(2)}{" "}
+                        <span
+                          className="text-base"
+                          style={{ color: "#6b7a4f" }}
+                        >
+                          kg
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {needsOccupancy && (
+                  <div
+                    className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
+                    style={{ backgroundColor: "#f5f1e8", color: "#5a6650" }}
+                  >
+                    <span>👥</span>
+                    <span>
+                      Shared between {occupancy}{" "}
+                      {occupancy === 1 ? "person" : "people"}
+                    </span>
+                  </div>
+                )}
+
+                <div
+                  className="pt-5"
+                  style={{ borderTop: "1px solid #e8e0cc" }}
+                >
+                  <p
+                    className="text-xs uppercase tracking-widest"
+                    style={{ color: "#8a9070" }}
+                  >
+                    That's about the same as
+                  </p>
+                  <p
+                    className="mt-2 text-2xl leading-tight"
+                    style={{
+                      fontFamily: "'Fraunces', Georgia, serif",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span style={{ color: "#3d5a2a" }}>
+                      {equivalent.count}
+                    </span>{" "}
+                    {equivalent.label}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Placeholders for later stages */}
+            <div
+              className="mb-4 rounded-3xl p-5 text-center text-sm"
+              style={{
+                border: "2px dashed #d6cfb8",
+                color: "#8a9070",
+              }}
+            >
+              🗺️ Map of your route — coming in stage 3
+            </div>
+            <div
+              className="mb-6 rounded-3xl p-5 text-center text-sm"
+              style={{
+                border: "2px dashed #d6cfb8",
+                color: "#8a9070",
+              }}
+            >
+              🚆 Public transport comparison — coming in stage 5
+            </div>
+
+            <button
+              onClick={onRestart}
+              className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
+              style={{
+                backgroundColor: "#3d5a2a",
+                color: "#ffffff",
+                boxShadow: "0 10px 25px -8px rgba(61, 90, 42, 0.4)",
+              }}
+            >
+              Start over
+            </button>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<CarbonCalculator />);
+    </script>
+  </body>
+</html>
