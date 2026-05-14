@@ -1029,16 +1029,10 @@
               </div>
             )}
 
-            {/* Placeholders for later stages */}
-            <div
-              className="mb-4 rounded-3xl p-5 text-center text-sm"
-              style={{
-                border: "2px dashed #d6cfb8",
-                color: "#8a9070",
-              }}
-            >
-              🗺️ Map of your route — coming in stage 3
-            </div>
+            {/* ----- MAP ----- */}
+            <MapPanel originLabel={originLabel} />
+
+            {/* Placeholder for stage 5 */}
             <div
               className="mb-6 rounded-3xl p-5 text-center text-sm"
               style={{
@@ -1060,6 +1054,70 @@
             >
               Start over
             </button>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  MAP PANEL — Maps Embed API iframe
+      // ============================================================================
+      /**
+       * Maps Embed API is free, unlimited, and browser-side — no proxy needed.
+       * It uses the existing referrer-restricted API key directly.
+       *
+       *  - If we have an origin postcode → "directions" mode shows the full route
+       *  - Otherwise → "place" mode shows just the event location pin
+       *
+       * Docs: https://developers.google.com/maps/documentation/embed/embedding-map
+       */
+      function MapPanel({ originLabel }) {
+        const hasOrigin = originLabel && originLabel.trim().length > 0;
+
+        const src = hasOrigin
+          ? "https://www.google.com/maps/embed/v1/directions" +
+            "?key=" + GOOGLE_API_KEY +
+            "&origin=" + encodeURIComponent(originLabel + ", UK") +
+            "&destination=" + encodeURIComponent(EVENT_LOCATION) +
+            "&mode=driving"
+          : "https://www.google.com/maps/embed/v1/place" +
+            "?key=" + GOOGLE_API_KEY +
+            "&q=" + encodeURIComponent(EVENT_LOCATION);
+
+        return (
+          <div
+            className="mb-4 overflow-hidden rounded-3xl"
+            style={{
+              backgroundColor: "#ffffff",
+              boxShadow:
+                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+            }}
+          >
+            <div className="px-5 pt-5 pb-3">
+              <p
+                className="text-xs uppercase tracking-widest"
+                style={{ color: "#8a9070" }}
+              >
+                {hasOrigin ? "Your route" : "Event location"}
+              </p>
+              {hasOrigin && (
+                <p
+                  className="mt-1 text-sm"
+                  style={{ color: "#5a6650" }}
+                >
+                  {originLabel} → {EVENT_LOCATION}
+                </p>
+              )}
+            </div>
+            <iframe
+              title="Map"
+              src={src}
+              width="100%"
+              height="240"
+              style={{ border: 0, display: "block" }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
           </div>
         );
       }
