@@ -92,15 +92,16 @@
       // Accepts a full address, postcode, or "lat,lng" string.
       const EVENT_LOCATION = "EX39 5AP"; // placeholder
 
-      // TODO: paste your Google Maps Platform API key here.
-      // 1. Create a Google Cloud project (console.cloud.google.com).
-      // 2. Enable "Distance Matrix API" (and later "Maps Embed API" for stage 3).
-      // 3. Create an API key under APIs & Services → Credentials.
-      // 4. RESTRICT IT: HTTP referrers → add "https://<yourname>.github.io/*"
-      //    and "http://localhost:*" for testing. Also restrict by API to just
-      //    Distance Matrix (+ Maps Embed in stage 3).
-      // 5. Paste it below.
+      // Google Maps Platform API key — used by the Apps Script proxy below.
+      // Restricted by HTTP referrer + API in Google Cloud Console.
       const GOOGLE_API_KEY = "AIzaSyAy1opt8OkVm1Nsc6DCAzWQxmxOYB1Jmy4";
+
+      // Google Apps Script proxy URL — needed because Google's Distance Matrix
+      // API doesn't return CORS headers, so direct browser calls are blocked.
+      // See apps-script-proxy.gs for the proxy code and setup steps.
+      // TODO: paste the Web App URL from your Apps Script deployment here.
+      const PROXY_URL =
+        "https://script.google.com/macros/s/AKfycbx6zHD_563ByZ02vtHT3MHcREm-vBjO6kT57yqPyWY5TvDkZyZLroP4qKkvbObjkFuA/exec";
 
       const DEFAULT_UNIT = "miles"; // "miles" or "km"
 
@@ -196,31 +197,30 @@
         return UK_POSTCODE_REGEX.test(pc.trim());
       }
 
-      // ---- GOOGLE DISTANCE MATRIX CALL ------------------------------------
+      // ---- DISTANCE LOOKUP VIA APPS SCRIPT PROXY --------------------------
       /**
-       * Returns distance in metres + a human-readable string, or throws.
-       * Direct browser fetch — relies on HTTP referrer restriction on the key.
+       * Calls our Apps Script web app, which calls Google's Distance Matrix
+       * server-side and returns the JSON response. This is needed because
+       * Google's API doesn't return CORS headers, so direct browser calls fail.
        *
-       * Note: Distance Matrix API has a CORS quirk — Google's docs recommend
-       * server-side calls. For a small event with referrer-restricted keys this
-       * usually works fine, but if you hit CORS errors in production we'll need
-       * a tiny proxy (Cloudflare Worker or Apps Script does it in ~10 lines).
+       * The proxy doesn't add meaningful latency (~200ms typical).
+       * Returns distance in metres + a human-readable string, or throws.
        */
       async function fetchDrivingDistance(originPostcode, destination) {
-        const origin = encodeURIComponent(originPostcode + ", UK");
-        const dest = encodeURIComponent(destination);
         const url =
-          "https://maps.googleapis.com/maps/api/distancematrix/json" +
-          `?origins=${origin}&destinations=${dest}` +
-          `&mode=driving&units=metric&region=uk&key=${GOOGLE_API_KEY}`;
+          PROXY_URL +
+          "?origin=" + encodeURIComponent(originPostcode + ", UK") +
+          "&destination=" + encodeURIComponent(destination);
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error("Network error contacting Google");
+        if (!res.ok) throw new Error("Couldn't reach the distance service. Try again?");
 
         const data = await res.json();
         if (data.status !== "OK") {
           throw new Error(
-            `Google API error: ${data.status}${data.error_message ? " — " + data.error_message : ""}`,
+            data.error_message
+              ? data.error_message
+              : `Google API error: ${data.status}`,
           );
         }
 
