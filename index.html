@@ -96,10 +96,17 @@
       // Restricted by HTTP referrer + API in Google Cloud Console.
       const GOOGLE_API_KEY = "AIzaSyAy1opt8OkVm1Nsc6DCAzWQxmxOYB1Jmy4";
 
+      // Separate key for the Static Maps image in the browser. Static Maps
+      // doesn't reliably accept HTTP referrer restrictions, so we use the
+      // proxy key here (API-restricted to Maps Static API only — even if it
+      // leaks, the worst anyone can do is load static map images).
+      // TODO: paste your proxy/unrestricted key here. Make sure "Maps Static API"
+      // is ticked under that key's API restrictions in Cloud Console.
+      const MAPS_KEY = "PASTE_PROXY_KEY_HERE";
+
       // Google Apps Script proxy URL — needed because Google's Distance Matrix
       // API doesn't return CORS headers, so direct browser calls are blocked.
       // See apps-script-proxy.gs for the proxy code and setup steps.
-      // TODO: paste the Web App URL from your Apps Script deployment here.
       const PROXY_URL =
         "https://script.google.com/macros/s/AKfycbxgALUDwnmJSe8lbrt_xJU0vqHLV7KIEeVodc4BdKrVCm5TRJXLkXLR4yD-VAx0jadX/exec";
 
@@ -129,6 +136,13 @@
         motorbike: 0.11,
         publicTransport: 0.07, // average of bus (0.10) and rail (0.035)
         cycleWalk: 0,
+      };
+
+      // Used for the stage-5 comparison panel — we show train as the cleaner
+      // option (it usually is), but bus is broken out for completeness.
+      const COMPARISON_FACTORS = {
+        rail: 0.035,
+        bus: 0.10,
       };
 
       const MILES_TO_KM = 1.60934;
@@ -378,7 +392,9 @@
                 )}
                 {screen === "results" && (
                   <ScreenResults
+                    mode={mode}
                     modeLabel={modeConfig?.label}
+                    distanceKm={distanceKm}
                     totalKg={totalKg}
                     perPersonKg={perPersonKg}
                     occupancy={occupancy}
@@ -868,7 +884,9 @@
       //  SCREEN 4 — results
       // ============================================================================
       function ScreenResults({
+        mode,
         modeLabel,
+        distanceKm,
         totalKg,
         perPersonKg,
         occupancy,
@@ -1032,16 +1050,22 @@
             {/* ----- MAP ----- */}
             <MapPanel originLabel={originLabel} />
 
-            {/* Placeholder for stage 5 */}
-            <div
-              className="mb-6 rounded-3xl p-5 text-center text-sm"
-              style={{
-                border: "2px dashed #d6cfb8",
-                color: "#8a9070",
-              }}
-            >
-              🚆 Public transport comparison — coming in stage 5
-            </div>
+            {/* ----- PUBLIC TRANSPORT COMPARISON ----- */}
+            <ComparisonPanel
+              mode={mode}
+              distanceKm={distanceKm}
+              perPersonKg={perPersonKg}
+            />
+
+            {/* ----- SAVE / EMAIL CAPTURE ----- */}
+            <SavePanel
+              mode={mode}
+              distanceKm={distanceKm}
+              origin={originLabel}
+              occupancy={occupancy}
+              totalKg={totalKg}
+              perPersonKg={perPersonKg}
+            />
 
             <button
               onClick={onRestart}
@@ -1054,6 +1078,421 @@
             >
               Start over
             </button>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SAVE PANEL — email + name + company + consent
+      // ============================================================================
+      /**
+       * Submits to the Apps Script proxy as a POST with action=save.
+       *
+       * Note: Apps Script doesn't accept arbitrary Content-Type headers from
+       * the browser without triggering a CORS preflight. We use
+       * `text/plain` (or no Content-Type at all) and JSON.stringify the body,
+       * which Apps Script can still parse from e.postData.contents — this is
+       * the standard Apps Script-from-browser pattern.
+       */
+      function SavePanel({
+        mode,
+        distanceKm,
+        origin,
+        occupancy,
+        totalKg,
+        perPersonKg,
+      }) {
+        const [name, setName] = React.useState("");
+        const [company, setCompany] = React.useState("");
+        const [email, setEmail] = React.useState("");
+        const [subscribed, setSubscribed] = React.useState(true);
+        const [status, setStatus] = React.useState("idle"); // idle | sending | done | error
+        const [errorMsg, setErrorMsg] = React.useState("");
+
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+        // Email required only if subscribed (per the brief). Otherwise email
+        // is optional but we still require *something* — name OR email —
+        // so we don't end up with totally blank rows.
+        const canSubmit = subscribed
+          ? emailValid
+          : (name.trim() || company.trim() || emailValid);
+
+        const submit = async () => {
+          if (!canSubmit || status === "sending") return;
+          setStatus("sending");
+          setErrorMsg("");
+          try {
+            const res = await fetch(PROXY_URL, {
+              method: "POST",
+              // text/plain avoids the CORS preflight that Apps Script can't handle.
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "save",
+                name: name.trim(),
+                company: company.trim(),
+                email: email.trim(),
+                subscribed,
+                mode,
+                distanceKm,
+                origin,
+                occupancy,
+                totalKg,
+                perPersonKg,
+              }),
+            });
+            const data = await res.json();
+            if (data.status === "OK") {
+              setStatus("done");
+            } else {
+              setStatus("error");
+              setErrorMsg(data.error_message || "Couldn't save. Try again?");
+            }
+          } catch (err) {
+            setStatus("error");
+            setErrorMsg("Network error. Try again?");
+          }
+        };
+
+        // ----- Success state -----
+        if (status === "done") {
+          return (
+            <div
+              className="mb-4 rounded-3xl p-6 text-center"
+              style={{
+                backgroundColor: "#e9f0df",
+                border: "1px solid #c8d4a8",
+              }}
+            >
+              <p className="text-3xl">✅</p>
+              <p
+                className="mt-2 text-xl leading-tight"
+                style={{
+                  fontFamily: "'Fraunces', Georgia, serif",
+                  fontWeight: 600,
+                  color: "#3d5a2a",
+                }}
+              >
+                Saved — thanks!
+              </p>
+              <p
+                className="mt-1 text-sm"
+                style={{ color: "#5a6650" }}
+              >
+                {subscribed
+                  ? "We'll send your results and a few tips on reducing your footprint."
+                  : "Your submission is in."}
+              </p>
+            </div>
+          );
+        }
+
+        // ----- Form -----
+        return (
+          <div
+            className="mb-4 rounded-3xl p-6"
+            style={{
+              backgroundColor: "#ffffff",
+              boxShadow:
+                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+            }}
+          >
+            <p
+              className="text-xs uppercase tracking-widest"
+              style={{ color: "#8a9070" }}
+            >
+              Save your results
+            </p>
+            <p
+              className="mt-1 text-2xl leading-tight"
+              style={{
+                fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 600,
+              }}
+            >
+              Want a follow-up? 📩
+            </p>
+            <p
+              className="mb-5 mt-2 text-sm"
+              style={{ color: "#5a6650" }}
+            >
+              We'll email your results plus a few tips on cutting your
+              footprint. Name &amp; company optional.
+            </p>
+
+            <div className="space-y-3">
+              <InputField
+                value={name}
+                onChange={setName}
+                placeholder="Name (optional)"
+                autoComplete="name"
+              />
+              <InputField
+                value={company}
+                onChange={setCompany}
+                placeholder="Company (optional)"
+                autoComplete="organization"
+              />
+              <InputField
+                value={email}
+                onChange={setEmail}
+                placeholder="Email"
+                type="email"
+                autoComplete="email"
+              />
+
+              <label
+                className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl p-3"
+                style={{ backgroundColor: "#f5f1e8" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={subscribed}
+                  onChange={(e) => setSubscribed(e.target.checked)}
+                  style={{
+                    marginTop: 2,
+                    width: 18,
+                    height: 18,
+                    accentColor: "#3d5a2a",
+                    cursor: "pointer",
+                  }}
+                />
+                <span
+                  className="text-sm"
+                  style={{ color: "#5a6650", lineHeight: 1.4 }}
+                >
+                  Email me my results &amp; tips on reducing my carbon
+                  footprint.
+                </span>
+              </label>
+            </div>
+
+            {status === "error" && (
+              <div
+                className="mt-4 rounded-2xl p-3 text-sm"
+                style={{
+                  backgroundColor: "#fbe8e0",
+                  color: "#7a3520",
+                  border: "1px solid #f0c8b8",
+                }}
+              >
+                ⚠️ {errorMsg}
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={!canSubmit || status === "sending"}
+              className="mt-5 w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
+              style={{
+                backgroundColor:
+                  canSubmit && status !== "sending"
+                    ? "#3d5a2a"
+                    : "#d6cfb8",
+                color:
+                  canSubmit && status !== "sending"
+                    ? "#ffffff"
+                    : "#8a9070",
+                cursor:
+                  canSubmit && status !== "sending"
+                    ? "pointer"
+                    : "not-allowed",
+                boxShadow:
+                  canSubmit && status !== "sending"
+                    ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
+                    : "none",
+              }}
+            >
+              {status === "sending" ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span
+                    className="spinner inline-block"
+                    style={{
+                      width: 16,
+                      height: 16,
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      borderTopColor: "#ffffff",
+                      borderRadius: "50%",
+                    }}
+                  />
+                  Saving…
+                </span>
+              ) : (
+                <>Save my results</>
+              )}
+            </button>
+          </div>
+        );
+      }
+
+      // Small reusable input — matches the rest of the design.
+      function InputField({
+        value,
+        onChange,
+        placeholder,
+        type = "text",
+        autoComplete,
+      }) {
+        return (
+          <input
+            type={type}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            className="w-full rounded-2xl px-4 py-3 text-base outline-none transition-all"
+            style={{
+              backgroundColor: "#f5f1e8",
+              border: "1.5px solid transparent",
+              color: "#1e2a1e",
+              fontFamily: "inherit",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#3d5a2a")}
+            onBlur={(e) => (e.target.style.borderColor = "transparent")}
+          />
+        );
+      }
+
+      // ============================================================================
+      //  COMPARISON PANEL — "what if you'd taken public transport?"
+      // ============================================================================
+      /**
+       * Shows the user how the same journey would compare by train and bus.
+       * Skipped entirely for cycle/walk (already zero) and for users who
+       * actually took public transport (they'd be comparing to themselves).
+       */
+      function ComparisonPanel({ mode, distanceKm, perPersonKg }) {
+        // Hide for modes where it doesn't make sense.
+        if (mode === "cycleWalk" || mode === "publicTransport") return null;
+        if (!distanceKm || distanceKm <= 0) return null;
+
+        const railKg = distanceKm * COMPARISON_FACTORS.rail;
+        const busKg = distanceKm * COMPARISON_FACTORS.bus;
+        const bestKg = Math.min(railKg, busKg);
+        const saving = perPersonKg - bestKg;
+        const savingPct = Math.round((saving / perPersonKg) * 100);
+        const cleanerMode = railKg < busKg ? "train" : "bus";
+        const cleanerEmoji = cleanerMode === "train" ? "🚆" : "🚌";
+
+        const isPositiveSaving = saving > 0;
+
+        return (
+          <div
+            className="mb-4 rounded-3xl p-6"
+            style={{
+              backgroundColor: "#ffffff",
+              boxShadow:
+                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
+            }}
+          >
+            <p
+              className="text-xs uppercase tracking-widest"
+              style={{ color: "#8a9070" }}
+            >
+              What if you'd
+            </p>
+            <p
+              className="mt-1 text-2xl leading-tight"
+              style={{
+                fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 600,
+              }}
+            >
+              taken the {cleanerMode}? {cleanerEmoji}
+            </p>
+
+            {/* Two-column comparison */}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: "#f5f1e8" }}
+              >
+                <p
+                  className="text-[11px] uppercase tracking-wider"
+                  style={{ color: "#8a9070" }}
+                >
+                  🚆 Train
+                </p>
+                <p
+                  className="mt-1 text-xl leading-none"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                    color: "#3d5a2a",
+                  }}
+                >
+                  {railKg.toFixed(2)}{" "}
+                  <span
+                    className="text-xs"
+                    style={{ color: "#6b7a4f" }}
+                  >
+                    kg
+                  </span>
+                </p>
+              </div>
+              <div
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: "#f5f1e8" }}
+              >
+                <p
+                  className="text-[11px] uppercase tracking-wider"
+                  style={{ color: "#8a9070" }}
+                >
+                  🚌 Bus
+                </p>
+                <p
+                  className="mt-1 text-xl leading-none"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                    color: "#3d5a2a",
+                  }}
+                >
+                  {busKg.toFixed(2)}{" "}
+                  <span
+                    className="text-xs"
+                    style={{ color: "#6b7a4f" }}
+                  >
+                    kg
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Savings line */}
+            {isPositiveSaving && (
+              <div
+                className="mt-4 rounded-2xl p-4"
+                style={{
+                  backgroundColor: "#e9f0df",
+                  border: "1px solid #c8d4a8",
+                }}
+              >
+                <p
+                  className="text-[11px] uppercase tracking-wider"
+                  style={{ color: "#6b7a4f" }}
+                >
+                  You could've saved
+                </p>
+                <p
+                  className="mt-1 text-xl leading-tight"
+                  style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 600,
+                    color: "#3d5a2a",
+                  }}
+                >
+                  {saving.toFixed(2)} kg CO₂e
+                  {!isNaN(savingPct) && savingPct > 0 && (
+                    <span
+                      className="ml-2 text-sm font-normal"
+                      style={{ color: "#6b7a4f" }}
+                    >
+                      ({savingPct}% less)
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         );
       }
@@ -1116,14 +1555,14 @@
             "&markers=" + destMarker +
             "&path=" + path +
             styleParams +
-            "&key=" + GOOGLE_API_KEY;
+            "&key=" + MAPS_KEY;
         } else {
           src =
             "https://maps.googleapis.com/maps/api/staticmap" +
             "?size=600x300&scale=2&zoom=12" +
             "&markers=" + destMarker +
             styleParams +
-            "&key=" + GOOGLE_API_KEY;
+            "&key=" + MAPS_KEY;
         }
 
         return (
