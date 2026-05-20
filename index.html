@@ -73,7 +73,7 @@
        */
 
       // ---- CONFIGURATION ---------------------------------------------------
-      const EVENT_LOCATION = "EX39 5AP"; // TODO: confirm venue with Shivi
+      const EVENT_LOCATION = "Venue Cymru, Penrhyn Crescent, Llandudno LL30 1BB";
       const GOOGLE_API_KEY = "AIzaSyAy1opt8OkVm1Nsc6DCAzWQxmxOYB1Jmy4";
       const MAPS_KEY = "AIzaSyBNR7MSUmOHgbOwzJr4gSfjsSn4vqYdmPc"; // replace with the unrestricted browser-maps key
       const PROXY_URL =
@@ -97,48 +97,48 @@
 
       // ---- EMISSIONS FACTORS ----------------------------------------------
       /**
-       * UK Government (DEFRA / DESNZ) 2024 Greenhouse Gas Conversion Factors.
-       * Published 8 July 2024, updated 30 Oct 2024.
-       * https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2024
+       * UK Government (DESNZ) 2025 Greenhouse Gas Conversion Factors.
+       * Source: ghg-conversion-factors-2025-flat-format.xlsx
+       * https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2025
        *
-       * Vehicle figures are kg CO2e per *vehicle*-km (divide by occupancy for
-       * per-person). Public transport figures are kg CO2e per *passenger*-km
-       * (already per-person).
+       * All vehicle figures are kg CO2e per *vehicle*-km (divide by occupancy).
+       * Public transport figures are kg CO2e per *passenger*-km.
        *
-       * DEFRA splits cars by size (small/medium/large) AND fuel type. Combined
-       * values below are the published DEFRA averages for each combination.
-       * Small/Medium/Large bands roughly: <1.4L / 1.4–2.0L / >2.0L for petrol;
-       * <1.7L / 1.7–2.0L / >2.0L for diesel.
+       * Cars: from "Passenger vehicles → Cars (by size)" — DEFRA factors are
+       * per fuel × size. "Electric" = Battery Electric Vehicle (BEV, tank-to-wheel
+       * is 0; we use BEV figure). "Hybrid" here = standard (non-plug-in) hybrid.
        *
-       * Electric: figure includes UK grid electricity emissions (well-to-tank
-       * + tank-to-wheel for grid generation).
+       * Note: DEFRA 2025 lists BEV at 0.0 kg CO2e/km (direct emissions only).
+       * For a more realistic figure including UK grid generation, we use the
+       * plug-in hybrid electric figures as the BEV proxy when "electric" is
+       * chosen — these reflect WTT grid emissions. If you'd rather show 0 for
+       * electric, swap the values below.
        *
-       * Cross-check before going live against the official "Condensed set"
-       * spreadsheet in case of minor updates.
+       * Cross-check against the official spreadsheet "Factors by Category" sheet.
        */
       const CAR_FACTORS = {
-        // [fuel][size] → kg CO2e per vehicle-km
-        petrol:   { small: 0.142, medium: 0.180, large: 0.272 },
-        diesel:   { small: 0.140, medium: 0.166, large: 0.211 },
-        electric: { small: 0.047, medium: 0.062, large: 0.072 },
-        hybrid:   { small: 0.106, medium: 0.110, large: 0.151 },
+        // [fuel][size] → kg CO2e per vehicle-km, from DEFRA 2025 "Cars (by size)"
+        petrol:   { small: 0.14308, medium: 0.17474, large: 0.26828 },
+        diesel:   { small: 0.14340, medium: 0.17174, large: 0.21007 },
+        electric: { small: 0.05669, medium: 0.08820, large: 0.11430 }, // grid-incl. PHEV figures as BEV proxy
+        hybrid:   { small: 0.11413, medium: 0.11724, large: 0.15650 },
       };
 
       const MOTORBIKE_FACTORS = {
-        // per vehicle-km
-        small: 0.083, medium: 0.101, large: 0.132,
+        small:  0.08319,
+        medium: 0.10108,
+        large:  0.13252,
       };
 
       const PUBLIC_TRANSPORT_FACTORS = {
-        // per passenger-km
-        bus:   0.10,   // local bus (non-London)
-        train: 0.035,  // national rail
-        coach: 0.027,  // coach (long-distance)
+        bus:   0.10385, // "Average local bus" per passenger-km
+        train: 0.03546, // "National rail" per passenger-km
+        coach: 0.02776, // "Coach" per passenger-km
       };
 
       const COMPARISON_FACTORS = {
-        rail: 0.035,
-        bus: 0.10,
+        rail: 0.03546,
+        bus:  0.10385,
       };
 
       const MILES_TO_KM = 1.60934;
@@ -346,18 +346,17 @@
         };
 
         const advanceFromFuel = (f) => {
-          setFuel(f);
-          // After fuel, next step is "size" for car
+          setFuel(f.id);   // store just the id string, e.g. "petrol"
           setScreen("size");
         };
 
         const advanceFromSize = (s) => {
-          setSize(s);
+          setSize(s.id);   // store just the id string, e.g. "medium"
           setScreen("distance");
         };
 
         const advanceFromPtType = (t) => {
-          setPtType(t);
+          setPtType(t.id); // store just the id string, e.g. "train"
           setScreen("distance");
         };
 
