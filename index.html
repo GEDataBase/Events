@@ -1125,7 +1125,9 @@
             const res = await fetch(PROXY_URL, {
               method: "POST",
               // text/plain avoids the CORS preflight that Apps Script can't handle.
-              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              headers: {
+  "Content-Type": "application/json",
+},
               body: JSON.stringify({
                 action: "save",
                 name: name.trim(),
