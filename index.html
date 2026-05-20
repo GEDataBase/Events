@@ -6,21 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#f5f1e8" />
-    <title>Footprint — Carbon Calculator</title>
+    <meta name="theme-color" content="#00544F" />
+    <title>Greener Edge — Carbon Calculator</title>
 
-    <!-- Fonts -->
+    <!-- Inter as a clean modern substitute for Aptos -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
-    <!-- Tailwind via CDN (fine for a one-day event; not for high-traffic production) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- React + ReactDOM + Babel (so we can write JSX directly in the page) -->
     <script
       crossorigin
       src="https://unpkg.com/react@18/umd/react.production.min.js"
@@ -32,43 +30,32 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: #f5f1e8;
+      html, body {
+        margin: 0; padding: 0;
+        background-color: #00544F;
         font-family: "Inter", system-ui, -apple-system, sans-serif;
         -webkit-font-smoothing: antialiased;
+        color: #ffffff;
       }
-      /* Hide number input spinners */
       input[type="number"]::-webkit-outer-spin-button,
       input[type="number"]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
+        -webkit-appearance: none; margin: 0;
       }
-      input[type="number"] {
-        -moz-appearance: textfield;
-      }
+      input[type="number"] { -moz-appearance: textfield; }
+
       @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(8px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
-      .animate-fadeIn {
-        animation: fadeUp 0.4s ease backwards;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-      .spinner {
-        animation: spin 0.8s linear infinite;
+      .animate-fadeIn { animation: fadeUp 0.35s ease backwards; }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner { animation: spin 0.8s linear infinite; }
+
+      @keyframes pop {
+        0%   { transform: scale(0.9); opacity: 0; }
+        60%  { transform: scale(1.05); }
+        100% { transform: scale(1); opacity: 1; }
       }
     </style>
   </head>
@@ -78,68 +65,77 @@
     <script type="text/babel" data-presets="react">
       /**
        * ============================================================================
-       *  CARBON CALCULATOR — STAGES 1 & 2
+       *  GREENER EDGE — CARBON CALCULATOR
        * ----------------------------------------------------------------------------
-       *  Stage 1: travel mode + manual distance + occupancy + results.
-       *  Stage 2: postcode lookup via Google Distance Matrix API.
-       *
-       *  CONFIGURATION — edit the constants below.
+       *  Branded version with vehicle drill-down, reusable size step, varied
+       *  equivalents, and split follow-up flow.
        * ============================================================================
        */
 
       // ---- CONFIGURATION ---------------------------------------------------
-      // TODO: replace with the actual event venue once Shivi confirms.
-      // Accepts a full address, postcode, or "lat,lng" string.
-      const EVENT_LOCATION = "EX39 5AP"; // placeholder
-
-      // Google Maps Platform API key — used by the Apps Script proxy below.
-      // Restricted by HTTP referrer + API in Google Cloud Console.
+      const EVENT_LOCATION = "EX39 5AP"; // TODO: confirm venue with Shivi
       const GOOGLE_API_KEY = "AIzaSyAy1opt8OkVm1Nsc6DCAzWQxmxOYB1Jmy4";
-
-      // Separate key for the Static Maps image in the browser. Static Maps
-      // doesn't reliably accept HTTP referrer restrictions, so we use the
-      // proxy key here (API-restricted to Maps Static API only — even if it
-      // leaks, the worst anyone can do is load static map images).
-      // TODO: paste your proxy/unrestricted key here. Make sure "Maps Static API"
-      // is ticked under that key's API restrictions in Cloud Console.
-      const MAPS_KEY = "AIzaSyBNR7MSUmOHgbOwzJr4gSfjsSn4vqYdmPc";
-
-      // Google Apps Script proxy URL — needed because Google's Distance Matrix
-      // API doesn't return CORS headers, so direct browser calls are blocked.
-      // See apps-script-proxy.gs for the proxy code and setup steps.
+      const MAPS_KEY = "AIzaSyAy1opt8OkVm1Nsc6DCAzWQxmxOYB1Jmy4"; // replace with the unrestricted browser-maps key
       const PROXY_URL =
         "https://script.google.com/macros/s/AKfycbxgALUDwnmJSe8lbrt_xJU0vqHLV7KIEeVodc4BdKrVCm5TRJXLkXLR4yD-VAx0jadX/exec";
+      const DEFAULT_UNIT = "miles";
 
-      const DEFAULT_UNIT = "miles"; // "miles" or "km"
-
-      // ---- EMISSIONS FACTORS -----------------------------------------------
-      /**
-       * All factors are kg CO2e per km (or per passenger-km for shared modes).
-       * Sourced from UK Government (DEFRA / DESNZ) 2024 Greenhouse Gas Conversion
-       * Factors for Company Reporting — published 8 July 2024, updated 30 Oct 2024.
-       * https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2024
-       *
-       *   CAR_AVG       0.17  kg CO2e/km   "Average car" (unknown size/fuel).
-       *                                    Whole-vehicle figure — divide by
-       *                                    occupancy for per-person.
-       *   MOTORBIKE_AVG 0.11  kg CO2e/km   "Average motorbike".
-       *   BUS_AVG       0.10  kg CO2e/passenger-km   "Local bus (not London)".
-       *   RAIL_AVG      0.035 kg CO2e/passenger-km   "National rail" UK average
-       *                                    (DEFRA 2024 exact value: 0.03546).
-       *   CYCLE/WALK    0     Direct emissions only.
-       *
-       * Please cross-check against the official "condensed set" spreadsheet
-       * before going live in case of minor updates.
-       */
-      const EMISSIONS_FACTORS = {
-        car: 0.17,
-        motorbike: 0.11,
-        publicTransport: 0.07, // average of bus (0.10) and rail (0.035)
-        cycleWalk: 0,
+      // ---- BRAND -----------------------------------------------------------
+      const BRAND = {
+        dark: "#00544F",   // primary deep teal-green
+        lime: "#85BE00",   // accent lime
+        cream: "#f5f1e8",  // warm card surface for contrast against dark bg
+        white: "#ffffff",
+        // Derived shades for hierarchy
+        darkAlt: "#003E3A",
+        limeDark: "#6FA000",
+        muted: "#8FB4B0",
+        cardText: "#1e2a1e",
+        cardSubtle: "#5a6650",
+        cardLabel: "#7a8a82",
       };
 
-      // Used for the stage-5 comparison panel — we show train as the cleaner
-      // option (it usually is), but bus is broken out for completeness.
+      // ---- EMISSIONS FACTORS ----------------------------------------------
+      /**
+       * UK Government (DEFRA / DESNZ) 2024 Greenhouse Gas Conversion Factors.
+       * Published 8 July 2024, updated 30 Oct 2024.
+       * https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2024
+       *
+       * Vehicle figures are kg CO2e per *vehicle*-km (divide by occupancy for
+       * per-person). Public transport figures are kg CO2e per *passenger*-km
+       * (already per-person).
+       *
+       * DEFRA splits cars by size (small/medium/large) AND fuel type. Combined
+       * values below are the published DEFRA averages for each combination.
+       * Small/Medium/Large bands roughly: <1.4L / 1.4–2.0L / >2.0L for petrol;
+       * <1.7L / 1.7–2.0L / >2.0L for diesel.
+       *
+       * Electric: figure includes UK grid electricity emissions (well-to-tank
+       * + tank-to-wheel for grid generation).
+       *
+       * Cross-check before going live against the official "Condensed set"
+       * spreadsheet in case of minor updates.
+       */
+      const CAR_FACTORS = {
+        // [fuel][size] → kg CO2e per vehicle-km
+        petrol:   { small: 0.142, medium: 0.180, large: 0.272 },
+        diesel:   { small: 0.140, medium: 0.166, large: 0.211 },
+        electric: { small: 0.047, medium: 0.062, large: 0.072 },
+        hybrid:   { small: 0.106, medium: 0.110, large: 0.151 },
+      };
+
+      const MOTORBIKE_FACTORS = {
+        // per vehicle-km
+        small: 0.083, medium: 0.101, large: 0.132,
+      };
+
+      const PUBLIC_TRANSPORT_FACTORS = {
+        // per passenger-km
+        bus:   0.10,   // local bus (non-London)
+        train: 0.035,  // national rail
+        coach: 0.027,  // coach (long-distance)
+      };
+
       const COMPARISON_FACTORS = {
         rail: 0.035,
         bus: 0.10,
@@ -147,35 +143,67 @@
 
       const MILES_TO_KM = 1.60934;
 
-      // ---- RELATABLE EQUIVALENTS -------------------------------------------
+      // ---- RELATABLE EQUIVALENTS ------------------------------------------
       /**
-       * Sanity-checked figures:
-       *  - Coffee (filter, with milk): ~0.21 kg CO2e (Berners-Lee, 2020)
-       *  - Smartphone full charge: ~0.005 kg CO2e
-       *  - 1 hour Netflix HD: ~0.055 kg CO2e (IEA / Carbon Trust 2021 revised)
+       * Mix of household-energy equivalents. Numbers are based on:
+       *  - Kettle boil (full kettle, ~3kW for 3min): ~0.045 kg CO2e (UK grid)
+       *  - TV (modern 50" LED, ~0.05 kW, 1 hour): ~0.011 kg CO2e
+       *  - Average UK home, 1 hour of total energy use: ~0.85 kg CO2e
+       *  - LED bulb 8W for 1 hour: ~0.0018 kg CO2e
+       *
+       * We auto-pick the equivalent that lands in a 1-100 range so it feels
+       * memorable. Small numbers get the kettle, mid-range gets TV, big gets home.
        */
       const EQUIVALENTS = [
-        { label: "cups of coffee ☕", perKg: 1 / 0.21 },
-        { label: "phone charges 🔋", perKg: 1 / 0.005 },
-        { label: "hours of Netflix 📺", perKg: 1 / 0.055 },
+        {
+          unit: "kettle boils",
+          emoji: "🫖",
+          format: (n) => `boiling the kettle ${n} ${n === 1 ? "time" : "times"}`,
+          perKg: 1 / 0.045,
+          idealMin: 1, idealMax: 80,
+        },
+        {
+          unit: "TV hours",
+          emoji: "📺",
+          format: (n) => `running a TV for ${n} ${n === 1 ? "hour" : "hours"}`,
+          perKg: 1 / 0.011,
+          idealMin: 1, idealMax: 200,
+        },
+        {
+          unit: "home hours",
+          emoji: "🏠",
+          format: (n) => `powering an average UK home for ${n} ${n === 1 ? "hour" : "hours"}`,
+          perKg: 1 / 0.85,
+          idealMin: 1, idealMax: 100,
+        },
       ];
 
       function pickEquivalent(kg) {
-        const candidates = EQUIVALENTS.map((e) => ({
+        // Try each in order; pick the first that lands in its ideal range.
+        const scored = EQUIVALENTS.map((e) => ({
           ...e,
-          count: Math.round(kg * e.perKg),
+          count: Math.max(1, Math.round(kg * e.perKg)),
         }));
-        const inRange = candidates.find((c) => c.count >= 1 && c.count <= 500);
-        return inRange || candidates[0];
+        const inRange = scored.find(
+          (e) => e.count >= e.idealMin && e.count <= e.idealMax,
+        );
+        if (inRange) return inRange;
+        // Fallback: whichever gives the smallest "memorable" number
+        return scored.reduce((best, cur) =>
+          Math.abs(cur.count - 30) < Math.abs(best.count - 30) ? cur : best,
+        );
       }
 
-      // ---- TRAVEL MODES ----------------------------------------------------
+      // ---- TRAVEL MODES ---------------------------------------------------
+      // Each mode declares which drill-down steps it needs.
+      // Steps: "fuel" (car only), "size" (car + motorbike + ?), "ptType" (bus/train/coach)
       const TRAVEL_MODES = [
         {
           id: "car",
           label: "Car",
           emoji: "🚗",
-          sublabel: "Petrol, diesel, or hybrid",
+          sublabel: "Petrol, diesel, EV, hybrid",
+          steps: ["fuel", "size"],
           needsOccupancy: true,
         },
         {
@@ -183,13 +211,15 @@
           label: "Motorbike",
           emoji: "🏍️",
           sublabel: "Or scooter",
+          steps: ["size"],
           needsOccupancy: true,
         },
         {
           id: "publicTransport",
           label: "Public transport",
           emoji: "🚆",
-          sublabel: "Bus or train",
+          sublabel: "Bus, train, coach",
+          steps: ["ptType"],
           needsOccupancy: false,
         },
         {
@@ -197,79 +227,137 @@
           label: "Cycle or walk",
           emoji: "🚴",
           sublabel: "Zero emissions, hero",
+          steps: [],
           needsOccupancy: false,
         },
       ];
 
+      const FUEL_OPTIONS = [
+        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "Unleaded" },
+        { id: "diesel",   label: "Diesel",   emoji: "🛢️", sublabel: "" },
+        { id: "electric", label: "Electric", emoji: "⚡", sublabel: "Battery EV" },
+        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "Petrol + electric" },
+      ];
+
+      const CAR_SIZE_OPTIONS = [
+        { id: "small",  label: "Small",  emoji: "🚙", sublabel: "Hatchback, city car" },
+        { id: "medium", label: "Medium", emoji: "🚗", sublabel: "Saloon, estate" },
+        { id: "large",  label: "Large",  emoji: "🚐", sublabel: "SUV, 4x4, van" },
+      ];
+
+      const BIKE_SIZE_OPTIONS = [
+        { id: "small",  label: "Small",  emoji: "🛵", sublabel: "Up to 125cc" },
+        { id: "medium", label: "Medium", emoji: "🏍️", sublabel: "125–500cc" },
+        { id: "large",  label: "Large",  emoji: "🏁", sublabel: "Over 500cc" },
+      ];
+
+      const PT_TYPE_OPTIONS = [
+        { id: "train", label: "Train",   emoji: "🚆", sublabel: "National rail" },
+        { id: "bus",   label: "Bus",     emoji: "🚌", sublabel: "Local bus" },
+        { id: "coach", label: "Coach",   emoji: "🚍", sublabel: "Long-distance" },
+      ];
+
       // ---- UK POSTCODE VALIDATION -----------------------------------------
-      // Permissive regex — accepts with or without space, case-insensitive.
       const UK_POSTCODE_REGEX =
         /^([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(([A-Za-z][0-9][A-Za-z])|([A-Za-z][A-Ha-hJ-Yj-y][0-9]?[A-Za-z])))) ?[0-9][A-Za-z]{2})$/;
+      const isValidUKPostcode = (pc) =>
+        !!pc && UK_POSTCODE_REGEX.test(pc.trim());
 
-      function isValidUKPostcode(pc) {
-        if (!pc) return false;
-        return UK_POSTCODE_REGEX.test(pc.trim());
-      }
-
-      // ---- DISTANCE LOOKUP VIA APPS SCRIPT PROXY --------------------------
-      /**
-       * Calls our Apps Script web app, which calls Google's Distance Matrix
-       * server-side and returns the JSON response. This is needed because
-       * Google's API doesn't return CORS headers, so direct browser calls fail.
-       *
-       * The proxy doesn't add meaningful latency (~200ms typical).
-       * Returns distance in metres + a human-readable string, or throws.
-       */
+      // ---- DISTANCE LOOKUP VIA PROXY --------------------------------------
       async function fetchDrivingDistance(originPostcode, destination) {
         const url =
           PROXY_URL +
           "?origin=" + encodeURIComponent(originPostcode + ", UK") +
           "&destination=" + encodeURIComponent(destination);
-
         const res = await fetch(url);
         if (!res.ok) throw new Error("Couldn't reach the distance service. Try again?");
-
         const data = await res.json();
         if (data.status !== "OK") {
-          throw new Error(
-            data.error_message
-              ? data.error_message
-              : `Google API error: ${data.status}`,
-          );
+          throw new Error(data.error_message || `Google API error: ${data.status}`);
         }
-
-        const element = data.rows?.[0]?.elements?.[0];
-        if (!element || element.status !== "OK") {
-          throw new Error(
-            "Couldn't find a driving route between those two places. Double-check the postcode?",
-          );
+        const el = data.rows?.[0]?.elements?.[0];
+        if (!el || el.status !== "OK") {
+          throw new Error("Couldn't find a driving route between those two places. Double-check the postcode?");
         }
+        return { meters: el.distance.value, text: el.distance.text };
+      }
 
-        return {
-          meters: element.distance.value,
-          text: element.distance.text, // e.g. "42.3 km"
-          durationText: element.duration.text,
-        };
+      // ---- EMISSIONS FACTOR RESOLVER --------------------------------------
+      function resolveEmissionsFactor({ mode, fuel, size, ptType }) {
+        if (mode === "car" && fuel && size) return CAR_FACTORS[fuel][size];
+        if (mode === "motorbike" && size) return MOTORBIKE_FACTORS[size];
+        if (mode === "publicTransport" && ptType) return PUBLIC_TRANSPORT_FACTORS[ptType];
+        if (mode === "cycleWalk") return 0;
+        return 0;
+      }
+
+      function modeDescription({ mode, fuel, size, ptType }) {
+        if (mode === "cycleWalk") return "by cycle or on foot";
+        if (mode === "publicTransport") return "by " + (ptType || "public transport");
+        if (mode === "car") {
+          const fuelLabel = FUEL_OPTIONS.find((f) => f.id === fuel)?.label?.toLowerCase() || "";
+          return `by ${size || ""} ${fuelLabel} car`.replace(/\s+/g, " ").trim();
+        }
+        if (mode === "motorbike") return `by ${size || ""} motorbike`.trim();
+        return "";
       }
 
       // ============================================================================
-      //  MAIN COMPONENT
+      //  MAIN
       // ============================================================================
       function CarbonCalculator() {
         const [screen, setScreen] = React.useState("mode");
+        // mode | fuel | size | ptType | distance | occupancy | results | followup | details | thanks
+
         const [mode, setMode] = React.useState(null);
+        const [fuel, setFuel] = React.useState(null);
+        const [size, setSize] = React.useState(null);
+        const [ptType, setPtType] = React.useState(null);
 
-        // Distance state — can be set manually OR via postcode lookup
         const [distanceKm, setDistanceKm] = React.useState(null);
-        const [distanceLabel, setDistanceLabel] = React.useState(""); // e.g. "42.3 km" or "26 miles"
-        const [originLabel, setOriginLabel] = React.useState(""); // for results screen ("from EX39 5AP")
-
+        const [distanceLabel, setDistanceLabel] = React.useState("");
+        const [originLabel, setOriginLabel] = React.useState("");
         const [occupancy, setOccupancy] = React.useState(1);
+
+        const [submissionStatus, setSubmissionStatus] = React.useState("idle"); // idle | anonymousSaved | saving | done | error
+        const [submissionError, setSubmissionError] = React.useState("");
 
         const modeConfig = TRAVEL_MODES.find((m) => m.id === mode);
 
-        const selectMode = (id) => {
-          setMode(id);
+        // ---- Calculation ----
+        const factor = resolveEmissionsFactor({ mode, fuel, size, ptType });
+        const totalKg = (distanceKm || 0) * factor;
+        const perPersonKg = modeConfig?.needsOccupancy ? totalKg / occupancy : totalKg;
+
+        // ---- Navigation helpers ----
+        const reset = () => {
+          setScreen("mode");
+          setMode(null); setFuel(null); setSize(null); setPtType(null);
+          setDistanceKm(null); setDistanceLabel(""); setOriginLabel("");
+          setOccupancy(1);
+          setSubmissionStatus("idle");
+          setSubmissionError("");
+        };
+
+        const advanceFromMode = (m) => {
+          setMode(m.id);
+          if (m.steps[0]) setScreen(m.steps[0]);
+          else setScreen("distance");
+        };
+
+        const advanceFromFuel = (f) => {
+          setFuel(f);
+          // After fuel, next step is "size" for car
+          setScreen("size");
+        };
+
+        const advanceFromSize = (s) => {
+          setSize(s);
+          setScreen("distance");
+        };
+
+        const advanceFromPtType = (t) => {
+          setPtType(t);
           setScreen("distance");
         };
 
@@ -277,111 +365,159 @@
           setDistanceKm(km);
           setDistanceLabel(label);
           setOriginLabel(origin || "");
-          if (modeConfig?.needsOccupancy) {
-            setScreen("occupancy");
-          } else {
-            setScreen("results");
-          }
-          // re-read modeConfig because state hasn't flushed yet — use the id
-          const m = TRAVEL_MODES.find((x) => x.id === mode);
-          if (!m?.needsOccupancy) setScreen("results");
+          setScreen(modeConfig?.needsOccupancy ? "occupancy" : "results");
         };
 
-        const restart = () => {
-          setMode(null);
-          setDistanceKm(null);
-          setDistanceLabel("");
-          setOriginLabel("");
-          setOccupancy(1);
-          setScreen("mode");
-        };
+        // ---- Anonymous save: when user lands on the results screen, push a row ----
+        // so we still capture the journey even if they decline the follow-up.
+        // We only save once per session, and we never include PII at this stage.
+        React.useEffect(() => {
+          if (screen !== "results") return;
+          if (submissionStatus !== "idle") return;
+          if (!distanceKm || distanceKm <= 0) return;
+          // fire-and-forget
+          (async () => {
+            try {
+              await fetch(PROXY_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                  action: "save",
+                  name: "",
+                  company: "",
+                  email: "",
+                  subscribed: false,
+                  mode: modeDescription({ mode, fuel, size, ptType }),
+                  distanceKm,
+                  origin: originLabel,
+                  occupancy,
+                  totalKg,
+                  perPersonKg,
+                }),
+              });
+              setSubmissionStatus("anonymousSaved");
+            } catch {
+              // Silent — anonymous save failure shouldn't block the user.
+              setSubmissionStatus("anonymousSaved");
+            }
+          })();
+        }, [screen]);
 
-        // Calculation
-        const factor = mode ? EMISSIONS_FACTORS[mode] : 0;
-        const totalKg = (distanceKm || 0) * factor;
-        const perPersonKg = modeConfig?.needsOccupancy
-          ? totalKg / occupancy
-          : totalKg;
+        // ---- Progress indicator: dynamic based on the path ----
+        const stepsForCurrentMode = ["mode"]
+          .concat(modeConfig?.steps || [])
+          .concat(["distance"])
+          .concat(modeConfig?.needsOccupancy ? ["occupancy"] : [])
+          .concat(["results"]);
+        const totalSteps = stepsForCurrentMode.length;
+        const currentStep = Math.max(1, stepsForCurrentMode.indexOf(screen) + 1);
 
-        // Progress indicator
-        const totalSteps = modeConfig?.needsOccupancy ? 4 : 3;
-        const stepLabels = {
-          mode: 1,
-          distance: 2,
-          occupancy: 3,
-          results: totalSteps,
-        };
-        const currentStep = stepLabels[screen];
+        // ---- Header breadcrumb so users see context ----
+        const breadcrumb = [
+          modeConfig?.label,
+          fuel && FUEL_OPTIONS.find((f) => f.id === fuel)?.label,
+          size && (mode === "motorbike"
+            ? BIKE_SIZE_OPTIONS.find((s) => s.id === size)?.label
+            : CAR_SIZE_OPTIONS.find((s) => s.id === size)?.label),
+          ptType && PT_TYPE_OPTIONS.find((p) => p.id === ptType)?.label,
+        ].filter(Boolean).join(" · ");
 
         return (
-          <div
-            style={{
-              minHeight: "100vh",
-              backgroundColor: "#f5f1e8",
-              color: "#1e2a1e",
-            }}
-          >
-            {/* Decorative top fade */}
-            <div
-              style={{
-                position: "fixed",
-                inset: "0 0 auto 0",
-                height: "8rem",
-                background:
-                  "linear-gradient(to bottom, #e8e0cc, transparent)",
-                pointerEvents: "none",
-              }}
-            />
+          <div style={{
+            minHeight: "100vh",
+            backgroundColor: BRAND.dark,
+            color: BRAND.white,
+            position: "relative",
+            overflow: "hidden",
+          }}>
+            {/* Subtle decorative leaf in background */}
+            <div style={{
+              position: "absolute",
+              top: -120, right: -120,
+              width: 400, height: 400,
+              backgroundImage:
+                "radial-gradient(circle, rgba(133,190,0,0.08) 0%, transparent 70%)",
+              pointerEvents: "none",
+            }}/>
 
-            <div className="relative mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10 pt-6">
-              {/* Header */}
-              <header className="mb-8 flex items-center justify-between">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl">🌱</span>
-                  <span
-                    className="text-lg tracking-tight"
-                    style={{
-                      fontFamily: "'Fraunces', Georgia, serif",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Footprint
-                  </span>
-                </div>
+            <div className="relative mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10 pt-5">
+              {/* ---- HEADER ---- */}
+              <Header
+                currentStep={currentStep}
+                totalSteps={totalSteps}
+                showProgress={!["thanks"].includes(screen)}
+              />
+
+              {/* Optional breadcrumb */}
+              {breadcrumb && !["thanks","followup","details"].includes(screen) && (
                 <div
-                  className="flex items-center gap-2 text-xs uppercase tracking-widest"
-                  style={{ color: "#6b7a4f" }}
+                  className="mb-3 text-xs"
+                  style={{ color: BRAND.lime, letterSpacing: "0.05em" }}
                 >
-                  <span>
-                    Step {currentStep} of {totalSteps}
-                  </span>
-                  <div className="flex gap-1">
-                    {Array.from({ length: totalSteps }).map((_, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          height: 6,
-                          width: 16,
-                          borderRadius: 9999,
-                          backgroundColor:
-                            i < currentStep ? "#3d5a2a" : "#d6cfb8",
-                          transition: "background-color 0.3s",
-                        }}
-                      />
-                    ))}
-                  </div>
+                  {breadcrumb}
                 </div>
-              </header>
+              )}
 
+              {/* ---- SCREENS ---- */}
               <main className="flex-1">
-                {screen === "mode" && <ScreenMode onSelect={selectMode} />}
-                {screen === "distance" && (
-                  <ScreenDistance
-                    onBack={() => setScreen("mode")}
-                    onSubmit={handleDistanceSubmit}
-                    modeLabel={modeConfig?.label}
+                {screen === "mode" && (
+                  <ScreenPicker
+                    eyebrow="Step 1"
+                    title="How did you get here?"
+                    subtitle="Tap your mode of transport to begin."
+                    options={TRAVEL_MODES}
+                    onSelect={advanceFromMode}
                   />
                 )}
+
+                {screen === "fuel" && (
+                  <ScreenPicker
+                    eyebrow="Step 2"
+                    title="What fuel?"
+                    subtitle="Pick what powers your car."
+                    options={FUEL_OPTIONS}
+                    onSelect={advanceFromFuel}
+                    onBack={() => setScreen("mode")}
+                  />
+                )}
+
+                {screen === "size" && (
+                  <ScreenPicker
+                    eyebrow={mode === "car" ? "Step 3" : "Step 2"}
+                    title={mode === "motorbike" ? "What size bike?" : "What size?"}
+                    subtitle={mode === "motorbike"
+                      ? "Engine size, not body size."
+                      : "Roughly. Don't overthink it."}
+                    options={mode === "motorbike" ? BIKE_SIZE_OPTIONS : CAR_SIZE_OPTIONS}
+                    onSelect={advanceFromSize}
+                    onBack={() => setScreen(mode === "car" ? "fuel" : "mode")}
+                  />
+                )}
+
+                {screen === "ptType" && (
+                  <ScreenPicker
+                    eyebrow="Step 2"
+                    title="Bus, train, or coach?"
+                    subtitle="Pick what you took."
+                    options={PT_TYPE_OPTIONS}
+                    onSelect={advanceFromPtType}
+                    onBack={() => setScreen("mode")}
+                  />
+                )}
+
+                {screen === "distance" && (
+                  <ScreenDistance
+                    onBack={() => {
+                      if (modeConfig?.steps?.length) {
+                        setScreen(modeConfig.steps[modeConfig.steps.length - 1]);
+                      } else {
+                        setScreen("mode");
+                      }
+                    }}
+                    onSubmit={handleDistanceSubmit}
+                  />
+                )}
+
                 {screen === "occupancy" && (
                   <ScreenOccupancy
                     occupancy={occupancy}
@@ -390,10 +526,13 @@
                     onSubmit={() => setScreen("results")}
                   />
                 )}
+
                 {screen === "results" && (
                   <ScreenResults
                     mode={mode}
-                    modeLabel={modeConfig?.label}
+                    fuel={fuel}
+                    size={size}
+                    ptType={ptType}
                     distanceKm={distanceKm}
                     totalKg={totalKg}
                     perPersonKg={perPersonKg}
@@ -401,8 +540,35 @@
                     needsOccupancy={modeConfig?.needsOccupancy}
                     distanceLabel={distanceLabel}
                     originLabel={originLabel}
-                    onRestart={restart}
+                    onContinue={() => setScreen("followup")}
                   />
+                )}
+
+                {screen === "followup" && (
+                  <ScreenFollowup
+                    onYes={() => setScreen("details")}
+                    onNo={() => setScreen("thanks")}
+                  />
+                )}
+
+                {screen === "details" && (
+                  <ScreenDetails
+                    mode={mode}
+                    fuel={fuel}
+                    size={size}
+                    ptType={ptType}
+                    distanceKm={distanceKm}
+                    origin={originLabel}
+                    occupancy={occupancy}
+                    totalKg={totalKg}
+                    perPersonKg={perPersonKg}
+                    onDone={() => setScreen("thanks")}
+                    onBack={() => setScreen("followup")}
+                  />
+                )}
+
+                {screen === "thanks" && (
+                  <ScreenThanks onRestart={reset} />
                 )}
               </main>
             </div>
@@ -411,80 +577,163 @@
       }
 
       // ============================================================================
-      //  SCREEN 1 — travel mode cards
+      //  HEADER (logo + progress)
       // ============================================================================
-      function ScreenMode({ onSelect }) {
+      function Header({ currentStep, totalSteps, showProgress }) {
+        return (
+          <header className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Leaf size={28} />
+              <div>
+                <div style={{
+                  fontSize: 16, fontWeight: 700, color: BRAND.white,
+                  letterSpacing: "-0.01em", lineHeight: 1,
+                }}>
+                  Greener Edge
+                </div>
+                <div style={{
+                  fontSize: 9, fontWeight: 700, color: BRAND.lime,
+                  letterSpacing: "0.15em", marginTop: 2,
+                }}>
+                  CARBON CALCULATOR
+                </div>
+              </div>
+            </div>
+
+            {showProgress && (
+              <div className="flex items-center gap-2 text-xs"
+                   style={{ color: BRAND.muted }}>
+                <span style={{ fontWeight: 500 }}>
+                  {currentStep}/{totalSteps}
+                </span>
+                <div className="flex gap-1">
+                  {Array.from({ length: totalSteps }).map((_, i) => (
+                    <span key={i} style={{
+                      height: 4, width: 14, borderRadius: 9999,
+                      backgroundColor: i < currentStep ? BRAND.lime : "rgba(255,255,255,0.2)",
+                      transition: "background-color 0.3s",
+                    }}/>
+                  ))}
+                </div>
+              </div>
+            )}
+          </header>
+        );
+      }
+
+      // Small inline-SVG version of the leaf logo so we don't need an external asset.
+      function Leaf({ size = 28 }) {
+        return (
+          <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+            <path
+              d="M75 15 C 60 15, 35 25, 25 50 C 18 68, 25 82, 35 85 L 50 60 Z M 75 15 C 80 35, 75 60, 50 60"
+              stroke={BRAND.lime} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"
+              fill="none"
+            />
+            <path d="M 50 60 L 40 80" stroke={BRAND.lime} strokeWidth="4" strokeLinecap="round"/>
+            <path d="M 55 45 L 45 50" stroke={BRAND.lime} strokeWidth="3" strokeLinecap="round"/>
+            <path d="M 60 30 L 50 35" stroke={BRAND.lime} strokeWidth="3" strokeLinecap="round"/>
+          </svg>
+        );
+      }
+
+      // ============================================================================
+      //  REUSABLE PICKER SCREEN (used by mode, fuel, size, ptType)
+      // ============================================================================
+      function ScreenPicker({ eyebrow, title, subtitle, options, onSelect, onBack }) {
         return (
           <div className="animate-fadeIn">
-            <h1
-              className="mb-2 text-3xl leading-tight"
-              style={{
-                fontFamily: "'Fraunces', Georgia, serif",
-                fontWeight: 600,
-              }}
-            >
-              How did you get here?
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mb-4 text-sm"
+                style={{ color: BRAND.lime }}
+              >
+                ← Back
+              </button>
+            )}
+
+            <p style={{
+              color: BRAND.lime, fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.15em", marginBottom: 6,
+            }}>
+              {eyebrow.toUpperCase()}
+            </p>
+            <h1 style={{
+              fontSize: 28, fontWeight: 700, lineHeight: 1.15,
+              color: BRAND.white, marginBottom: 8, letterSpacing: "-0.02em",
+            }}>
+              {title}
             </h1>
-            <p
-              className="mb-7 text-[15px]"
-              style={{ color: "#5a6650" }}
-            >
-              Tap your mode of transport to begin.
+            <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 28 }}>
+              {subtitle}
             </p>
 
             <div className="grid grid-cols-2 gap-3">
-              {TRAVEL_MODES.map((m, idx) => (
-                <button
-                  key={m.id}
-                  onClick={() => onSelect(m.id)}
-                  className="group relative flex aspect-square flex-col items-start justify-between rounded-2xl p-4 text-left transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-                  style={{
-                    backgroundColor: "#ffffff",
-                    boxShadow:
-                      "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-                    animation: `fadeUp 0.4s ease ${idx * 60}ms backwards`,
-                  }}
-                >
-                  <span
-                    className="text-5xl transition-transform group-hover:scale-110 group-hover:-rotate-3"
-                  >
-                    {m.emoji}
-                  </span>
-                  <div>
-                    <div
-                      className="text-[17px] leading-tight"
-                      style={{
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {m.label}
-                    </div>
-                    <div
-                      className="mt-0.5 text-[11px] uppercase tracking-wider"
-                      style={{ color: "#6b7a4f" }}
-                    >
-                      {m.sublabel}
-                    </div>
-                  </div>
-                </button>
+              {options.map((o, idx) => (
+                <PickerCard key={o.id} option={o} index={idx} onClick={() => onSelect(o)} />
               ))}
             </div>
           </div>
         );
       }
 
-      // ============================================================================
-      //  SCREEN 2 — distance entry (now with postcode tab)
-      // ============================================================================
-      function ScreenDistance({ onBack, onSubmit, modeLabel }) {
-        const [tab, setTab] = React.useState("manual"); // "manual" | "postcode"
+      function PickerCard({ option, index, onClick }) {
+        const [hover, setHover] = React.useState(false);
+        return (
+          <button
+            onClick={onClick}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            className="group relative flex aspect-square flex-col items-start justify-between p-4 text-left"
+            style={{
+              backgroundColor: BRAND.cream,
+              borderRadius: 20,
+              border: `2px solid ${hover ? BRAND.lime : "transparent"}`,
+              boxShadow: hover
+                ? "0 12px 24px -8px rgba(0,0,0,0.3)"
+                : "0 4px 12px -4px rgba(0,0,0,0.15)",
+              transform: hover ? "translateY(-2px)" : "translateY(0)",
+              transition: "all 0.2s ease",
+              cursor: "pointer",
+              animation: `fadeUp 0.4s ease ${index * 60}ms backwards`,
+            }}
+          >
+            <span style={{
+              fontSize: 44,
+              transform: hover ? "scale(1.1) rotate(-3deg)" : "scale(1)",
+              transition: "transform 0.25s ease",
+              display: "inline-block",
+            }}>
+              {option.emoji}
+            </span>
+            <div>
+              <div style={{
+                fontSize: 16, fontWeight: 700, color: BRAND.cardText,
+                lineHeight: 1.2, letterSpacing: "-0.01em",
+              }}>
+                {option.label}
+              </div>
+              {option.sublabel && (
+                <div style={{
+                  fontSize: 10, fontWeight: 600, color: BRAND.cardLabel,
+                  letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 3,
+                }}>
+                  {option.sublabel}
+                </div>
+              )}
+            </div>
+          </button>
+        );
+      }
 
-        // Manual entry state
+      // ============================================================================
+      //  DISTANCE SCREEN
+      // ============================================================================
+      function ScreenDistance({ onBack, onSubmit }) {
+        const [tab, setTab] = React.useState("postcode");
         const [distance, setDistance] = React.useState("");
         const [unit, setUnit] = React.useState(DEFAULT_UNIT);
-
-        // Postcode entry state
         const [postcode, setPostcode] = React.useState("");
         const [loading, setLoading] = React.useState(false);
         const [error, setError] = React.useState(null);
@@ -494,29 +743,18 @@
 
         const submitManual = () => {
           if (!canSubmitManual) return;
-          const km =
-            unit === "miles"
-              ? Number(distance) * MILES_TO_KM
-              : Number(distance);
-          onSubmit({
-            km,
-            label: `${distance} ${unit}`,
-            origin: "",
-          });
+          const km = unit === "miles" ? Number(distance) * MILES_TO_KM : Number(distance);
+          onSubmit({ km, label: `${distance} ${unit}`, origin: "" });
         };
 
         const submitPostcode = async () => {
           if (!canSubmitPostcode) return;
-          setLoading(true);
-          setError(null);
+          setLoading(true); setError(null);
           try {
-            const result = await fetchDrivingDistance(
-              postcode,
-              EVENT_LOCATION,
-            );
+            const r = await fetchDrivingDistance(postcode, EVENT_LOCATION);
             onSubmit({
-              km: result.meters / 1000,
-              label: result.text,
+              km: r.meters / 1000,
+              label: r.text,
               origin: postcode.toUpperCase().trim(),
             });
           } catch (e) {
@@ -527,251 +765,106 @@
 
         return (
           <div className="animate-fadeIn">
-            <button
-              onClick={onBack}
-              className="mb-4 text-sm"
-              style={{ color: "#6b7a4f" }}
-            >
+            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
               ← Back
             </button>
 
-            <h1
-              className="mb-2 text-3xl leading-tight"
-              style={{
-                fontFamily: "'Fraunces', Georgia, serif",
-                fontWeight: 600,
-              }}
-            >
+            <h1 style={{
+              fontSize: 28, fontWeight: 700, lineHeight: 1.15,
+              color: BRAND.white, marginBottom: 8, letterSpacing: "-0.02em",
+            }}>
               Where did you come from?
             </h1>
-            <p className="mb-6 text-[15px]" style={{ color: "#5a6650" }}>
-              <span style={{ color: "#3d5a2a" }}>({modeLabel})</span>
+            <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 24 }}>
+              We'll work out the distance.
             </p>
 
-            {/* Tab switcher */}
-            <div
-              className="mb-6 inline-flex rounded-full p-1"
-              style={{ backgroundColor: "#e8e0cc" }}
-            >
-              <button
-                onClick={() => {
-                  setTab("postcode");
-                  setError(null);
-                }}
-                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
-                style={{
-                  backgroundColor:
-                    tab === "postcode" ? "#3d5a2a" : "transparent",
-                  color: tab === "postcode" ? "#ffffff" : "#5a6650",
-                  boxShadow:
-                    tab === "postcode"
-                      ? "0 1px 2px rgba(0,0,0,0.08)"
-                      : "none",
-                }}
-              >
-                Use my postcode
-              </button>
-              <button
-                onClick={() => {
-                  setTab("manual");
-                  setError(null);
-                }}
-                className="rounded-full px-5 py-2 text-sm font-medium transition-all"
-                style={{
-                  backgroundColor:
-                    tab === "manual" ? "#3d5a2a" : "transparent",
-                  color: tab === "manual" ? "#ffffff" : "#5a6650",
-                  boxShadow:
-                    tab === "manual"
-                      ? "0 1px 2px rgba(0,0,0,0.08)"
-                      : "none",
-                }}
-              >
-                I know my distance
-              </button>
-            </div>
+            <Toggle
+              value={tab}
+              onChange={(v) => { setTab(v); setError(null); }}
+              options={[
+                { value: "postcode", label: "Use my postcode" },
+                { value: "manual",   label: "I know my distance" },
+              ]}
+            />
 
-            {/* ----- POSTCODE TAB ----- */}
             {tab === "postcode" && (
-              <div className="animate-fadeIn">
+              <div className="animate-fadeIn mt-6">
                 <div className="mb-6">
-                  <label
-                    className="mb-2 block text-xs uppercase tracking-widest"
-                    style={{ color: "#8a9070" }}
-                  >
-                    Your postcode
+                  <label style={{
+                    color: BRAND.lime, fontSize: 11, fontWeight: 700,
+                    letterSpacing: "0.15em", display: "block", marginBottom: 8,
+                  }}>
+                    YOUR POSTCODE
                   </label>
-                  <div
-                    className="flex items-baseline gap-3 pb-3"
-                    style={{ borderBottom: "2px solid #3d5a2a" }}
-                  >
+                  <div style={{ borderBottom: `2px solid ${BRAND.lime}`, paddingBottom: 10 }}>
                     <input
                       type="text"
                       value={postcode}
-                      onChange={(e) =>
-                        setPostcode(e.target.value.toUpperCase())
-                      }
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && submitPostcode()
-                      }
+                      onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && submitPostcode()}
                       placeholder="e.g. EX39 5AP"
                       autoComplete="postal-code"
                       autoCapitalize="characters"
-                      className="w-full bg-transparent text-4xl font-light outline-none"
+                      className="w-full bg-transparent outline-none"
                       style={{
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        color: "#1e2a1e",
-                        letterSpacing: "0.02em",
+                        fontSize: 36, fontWeight: 600, color: BRAND.white,
+                        letterSpacing: "0.04em",
                       }}
                       autoFocus
                     />
                   </div>
-                  <p
-                    className="mt-3 text-xs"
-                    style={{ color: "#8a9070" }}
-                  >
-                    🗺️ We'll calculate the driving distance to the event.
+                  <p style={{ color: BRAND.muted, fontSize: 12, marginTop: 10 }}>
+                    🗺️ We'll calculate driving distance to the event.
                   </p>
                 </div>
 
-                {error && (
-                  <div
-                    className="mb-4 rounded-2xl p-4 text-sm"
-                    style={{
-                      backgroundColor: "#fbe8e0",
-                      color: "#7a3520",
-                      border: "1px solid #f0c8b8",
-                    }}
-                  >
-                    ⚠️ {error}
-                  </div>
-                )}
+                {error && <ErrorBanner message={error} />}
 
-                <button
+                <PrimaryButton
                   onClick={submitPostcode}
                   disabled={!canSubmitPostcode || loading}
-                  className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
-                  style={{
-                    backgroundColor:
-                      canSubmitPostcode && !loading
-                        ? "#3d5a2a"
-                        : "#d6cfb8",
-                    color:
-                      canSubmitPostcode && !loading
-                        ? "#ffffff"
-                        : "#8a9070",
-                    cursor:
-                      canSubmitPostcode && !loading
-                        ? "pointer"
-                        : "not-allowed",
-                    boxShadow:
-                      canSubmitPostcode && !loading
-                        ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
-                        : "none",
-                  }}
+                  loading={loading}
+                  loadingLabel="Calculating…"
                 >
-                  {loading ? (
-                    <span className="inline-flex items-center justify-center gap-2">
-                      <span
-                        className="spinner inline-block"
-                        style={{
-                          width: 16,
-                          height: 16,
-                          border: "2px solid rgba(255,255,255,0.3)",
-                          borderTopColor: "#ffffff",
-                          borderRadius: "50%",
-                        }}
-                      />
-                      Calculating…
-                    </span>
-                  ) : (
-                    <>Continue →</>
-                  )}
-                </button>
+                  Continue →
+                </PrimaryButton>
               </div>
             )}
 
-            {/* ----- MANUAL ENTRY TAB ----- */}
             {tab === "manual" && (
-              <div className="animate-fadeIn">
-                <div
-                  className="mb-6 inline-flex rounded-full p-1"
-                  style={{ backgroundColor: "#e8e0cc" }}
-                >
-                  <button
-                    onClick={() => setUnit("miles")}
-                    className="rounded-full px-5 py-2 text-sm font-medium transition-all"
-                    style={{
-                      backgroundColor:
-                        unit === "miles" ? "#3d5a2a" : "transparent",
-                      color: unit === "miles" ? "#ffffff" : "#5a6650",
-                      boxShadow:
-                        unit === "miles"
-                          ? "0 1px 2px rgba(0,0,0,0.08)"
-                          : "none",
-                    }}
-                  >
-                    Miles
-                  </button>
-                  <button
-                    onClick={() => setUnit("km")}
-                    className="rounded-full px-5 py-2 text-sm font-medium transition-all"
-                    style={{
-                      backgroundColor:
-                        unit === "km" ? "#3d5a2a" : "transparent",
-                      color: unit === "km" ? "#ffffff" : "#5a6650",
-                      boxShadow:
-                        unit === "km"
-                          ? "0 1px 2px rgba(0,0,0,0.08)"
-                          : "none",
-                    }}
-                  >
-                    Kilometres
-                  </button>
+              <div className="animate-fadeIn mt-6">
+                <div className="mb-6">
+                  <Toggle
+                    value={unit}
+                    onChange={setUnit}
+                    options={[
+                      { value: "miles", label: "Miles" },
+                      { value: "km",    label: "Kilometres" },
+                    ]}
+                    small
+                  />
                 </div>
 
-                <div className="mb-8">
-                  <div
-                    className="flex items-baseline gap-3 pb-3"
-                    style={{ borderBottom: "2px solid #3d5a2a" }}
-                  >
+                <div className="mb-8" style={{ borderBottom: `2px solid ${BRAND.lime}`, paddingBottom: 10 }}>
+                  <div className="flex items-baseline gap-3">
                     <input
-                      type="number"
-                      inputMode="decimal"
+                      type="number" inputMode="decimal"
                       value={distance}
                       onChange={(e) => setDistance(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && submitManual()}
                       placeholder="0"
-                      className="w-full bg-transparent text-5xl font-light outline-none"
-                      style={{
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        color: "#1e2a1e",
-                      }}
+                      className="w-full bg-transparent outline-none"
+                      style={{ fontSize: 56, fontWeight: 600, color: BRAND.white }}
                       autoFocus
                     />
-                    <span className="text-lg" style={{ color: "#6b7a4f" }}>
-                      {unit}
-                    </span>
+                    <span style={{ color: BRAND.lime, fontSize: 18 }}>{unit}</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={submitManual}
-                  disabled={!canSubmitManual}
-                  className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
-                  style={{
-                    backgroundColor: canSubmitManual
-                      ? "#3d5a2a"
-                      : "#d6cfb8",
-                    color: canSubmitManual ? "#ffffff" : "#8a9070",
-                    cursor: canSubmitManual ? "pointer" : "not-allowed",
-                    boxShadow: canSubmitManual
-                      ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
-                      : "none",
-                  }}
-                >
+                <PrimaryButton onClick={submitManual} disabled={!canSubmitManual}>
                   Continue →
-                </button>
+                </PrimaryButton>
               </div>
             )}
           </div>
@@ -779,7 +872,7 @@
       }
 
       // ============================================================================
-      //  SCREEN 3 — occupancy
+      //  OCCUPANCY SCREEN
       // ============================================================================
       function ScreenOccupancy({ occupancy, setOccupancy, onBack, onSubmit }) {
         const dec = () => setOccupancy(Math.max(1, occupancy - 1));
@@ -787,352 +880,284 @@
 
         return (
           <div className="animate-fadeIn">
-            <button
-              onClick={onBack}
-              className="mb-4 text-sm"
-              style={{ color: "#6b7a4f" }}
-            >
+            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
               ← Back
             </button>
 
-            <h1
-              className="mb-2 text-3xl leading-tight"
-              style={{
-                fontFamily: "'Fraunces', Georgia, serif",
-                fontWeight: 600,
-              }}
-            >
+            <h1 style={{
+              fontSize: 28, fontWeight: 700, lineHeight: 1.15,
+              color: BRAND.white, marginBottom: 8, letterSpacing: "-0.02em",
+            }}>
               How many of you?
             </h1>
-            <p
-              className="mb-10 text-[15px]"
-              style={{ color: "#5a6650" }}
-            >
+            <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 36 }}>
               Including yourself. We'll split the emissions evenly.
             </p>
 
-            <div
-              className="mb-10 flex items-center justify-between rounded-3xl p-6"
-              style={{
-                backgroundColor: "#ffffff",
-                boxShadow:
-                  "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-              }}
-            >
-              <button
-                onClick={dec}
-                disabled={occupancy <= 1}
-                className="flex h-16 w-16 items-center justify-center rounded-full text-3xl transition-all active:scale-95"
-                style={{
-                  backgroundColor: "#e8e0cc",
-                  color: "#3d5a2a",
-                  opacity: occupancy <= 1 ? 0.4 : 1,
-                  cursor: occupancy <= 1 ? "not-allowed" : "pointer",
-                }}
-              >
-                −
-              </button>
+            <div style={{
+              backgroundColor: BRAND.cream, borderRadius: 24, padding: 24,
+              marginBottom: 36, display: "flex", alignItems: "center", justifyContent: "space-between",
+              boxShadow: "0 4px 12px -4px rgba(0,0,0,0.15)",
+            }}>
+              <StepperButton onClick={dec} disabled={occupancy <= 1}>−</StepperButton>
               <div className="text-center">
-                <div
-                  className="text-7xl leading-none"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                    color: "#3d5a2a",
-                  }}
-                >
+                <div style={{
+                  fontSize: 64, fontWeight: 700, color: BRAND.dark, lineHeight: 1,
+                }}>
                   {occupancy}
                 </div>
-                <div
-                  className="mt-1 text-xs uppercase tracking-widest"
-                  style={{ color: "#8a9070" }}
-                >
+                <div style={{
+                  fontSize: 11, fontWeight: 600, color: BRAND.cardLabel,
+                  letterSpacing: "0.15em", textTransform: "uppercase", marginTop: 6,
+                }}>
                   {occupancy === 1 ? "person" : "people"}
                 </div>
               </div>
-              <button
-                onClick={inc}
-                disabled={occupancy >= 8}
-                className="flex h-16 w-16 items-center justify-center rounded-full text-3xl transition-all active:scale-95"
-                style={{
-                  backgroundColor: "#e8e0cc",
-                  color: "#3d5a2a",
-                  opacity: occupancy >= 8 ? 0.4 : 1,
-                  cursor: occupancy >= 8 ? "not-allowed" : "pointer",
-                }}
-              >
-                +
-              </button>
+              <StepperButton onClick={inc} disabled={occupancy >= 8}>+</StepperButton>
             </div>
 
-            <button
-              onClick={onSubmit}
-              className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
-              style={{
-                backgroundColor: "#3d5a2a",
-                color: "#ffffff",
-                boxShadow: "0 10px 25px -8px rgba(61, 90, 42, 0.4)",
-              }}
-            >
-              See my footprint →
-            </button>
+            <PrimaryButton onClick={onSubmit}>See my footprint →</PrimaryButton>
           </div>
         );
       }
 
+      function StepperButton({ children, onClick, disabled }) {
+        return (
+          <button
+            onClick={onClick}
+            disabled={disabled}
+            style={{
+              width: 60, height: 60, borderRadius: "50%",
+              backgroundColor: disabled ? "#e8e0cc" : BRAND.lime,
+              color: disabled ? "#aaa" : BRAND.white,
+              fontSize: 28, fontWeight: 600,
+              cursor: disabled ? "not-allowed" : "pointer",
+              transition: "all 0.15s ease",
+              border: "none",
+            }}
+          >
+            {children}
+          </button>
+        );
+      }
+
       // ============================================================================
-      //  SCREEN 4 — results
+      //  RESULTS SCREEN
       // ============================================================================
       function ScreenResults({
-        mode,
-        modeLabel,
-        distanceKm,
-        totalKg,
-        perPersonKg,
-        occupancy,
-        needsOccupancy,
-        distanceLabel,
-        originLabel,
-        onRestart,
+        mode, fuel, size, ptType,
+        distanceKm, totalKg, perPersonKg, occupancy, needsOccupancy,
+        distanceLabel, originLabel, onContinue,
       }) {
         const equivalent = pickEquivalent(perPersonKg);
         const isZero = perPersonKg < 0.001;
+        const description = modeDescription({ mode, fuel, size, ptType });
 
         return (
           <div className="animate-fadeIn">
             {isZero ? (
               <>
-                <h1
-                  className="mb-2 text-3xl leading-tight"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  Zero emissions. Legend.
+                <h1 style={{
+                  fontSize: 32, fontWeight: 700, color: BRAND.white,
+                  lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 8,
+                }}>
+                  Zero emissions. Legend. 🌱
                 </h1>
-                <p
-                  className="mb-8 text-[15px]"
-                  style={{ color: "#5a6650" }}
-                >
-                  You travelled {distanceLabel} by {modeLabel?.toLowerCase()}{" "}
-                  — no CO₂ at all.
+                <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 24 }}>
+                  You travelled {distanceLabel} {description}. Not a gram of CO₂.
                 </p>
               </>
             ) : (
               <>
-                <p
-                  className="mb-2 text-xs uppercase tracking-widest"
-                  style={{ color: "#6b7a4f" }}
-                >
-                  Your journey
+                <p style={{
+                  color: BRAND.lime, fontSize: 11, fontWeight: 700,
+                  letterSpacing: "0.15em", marginBottom: 6,
+                }}>
+                  YOUR JOURNEY
                 </p>
-                <h1
-                  className="mb-1 text-3xl leading-tight"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  {perPersonKg.toFixed(2)}{" "}
-                  <span className="text-xl" style={{ color: "#6b7a4f" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                  <span style={{
+                    fontSize: 48, fontWeight: 700, color: BRAND.white,
+                    lineHeight: 1, letterSpacing: "-0.03em",
+                  }}>
+                    {perPersonKg.toFixed(2)}
+                  </span>
+                  <span style={{ color: BRAND.lime, fontSize: 18, fontWeight: 600 }}>
                     kg CO₂e
                   </span>
-                </h1>
-                <p className="mb-8 text-sm" style={{ color: "#5a6650" }}>
+                </div>
+                <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 20 }}>
                   per person, {distanceLabel}
-                  {originLabel && ` from ${originLabel}`} by{" "}
-                  {modeLabel?.toLowerCase()}
+                  {originLabel && ` from ${originLabel}`} {description}
                 </p>
               </>
             )}
 
             {!isZero && (
-              <div
-                className="mb-4 rounded-3xl p-6"
-                style={{
-                  backgroundColor: "#ffffff",
-                  boxShadow:
-                    "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-                }}
-              >
-                <div className="mb-5 flex items-start justify-between">
-                  <div>
-                    <p
-                      className="text-xs uppercase tracking-widest"
-                      style={{ color: "#8a9070" }}
-                    >
-                      Total
-                    </p>
-                    <p
-                      className="mt-1 text-3xl leading-none"
-                      style={{
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {totalKg.toFixed(2)}{" "}
-                      <span
-                        className="text-base"
-                        style={{ color: "#6b7a4f" }}
-                      >
-                        kg
-                      </span>
-                    </p>
-                  </div>
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                  <Stat label="Total" value={totalKg.toFixed(2)} unit="kg" />
                   {needsOccupancy && (
-                    <div className="text-right">
-                      <p
-                        className="text-xs uppercase tracking-widest"
-                        style={{ color: "#8a9070" }}
-                      >
-                        Per person
-                      </p>
-                      <p
-                        className="mt-1 text-3xl leading-none"
-                        style={{
-                          fontFamily: "'Fraunces', Georgia, serif",
-                          fontWeight: 600,
-                          color: "#3d5a2a",
-                        }}
-                      >
-                        {perPersonKg.toFixed(2)}{" "}
-                        <span
-                          className="text-base"
-                          style={{ color: "#6b7a4f" }}
-                        >
-                          kg
-                        </span>
-                      </p>
-                    </div>
+                    <Stat
+                      label="Per person"
+                      value={perPersonKg.toFixed(2)}
+                      unit="kg"
+                      highlight
+                      align="right"
+                    />
                   )}
                 </div>
 
                 {needsOccupancy && (
-                  <div
-                    className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
-                    style={{ backgroundColor: "#f5f1e8", color: "#5a6650" }}
-                  >
+                  <div style={{
+                    backgroundColor: "#f5f1e8", borderRadius: 12,
+                    padding: "8px 12px", fontSize: 12, color: BRAND.cardSubtle,
+                    display: "flex", alignItems: "center", gap: 6, marginBottom: 16,
+                  }}>
                     <span>👥</span>
-                    <span>
-                      Shared between {occupancy}{" "}
-                      {occupancy === 1 ? "person" : "people"}
-                    </span>
+                    <span>Shared between {occupancy} {occupancy === 1 ? "person" : "people"}</span>
                   </div>
                 )}
 
-                <div
-                  className="pt-5"
-                  style={{ borderTop: "1px solid #e8e0cc" }}
-                >
-                  <p
-                    className="text-xs uppercase tracking-widest"
-                    style={{ color: "#8a9070" }}
-                  >
-                    That's about the same as
+                <div style={{ borderTop: "1px solid #e8e0cc", paddingTop: 16 }}>
+                  <p style={{
+                    fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
+                    letterSpacing: "0.15em", marginBottom: 8,
+                  }}>
+                    THAT'S ABOUT THE SAME AS
                   </p>
-                  <p
-                    className="mt-2 text-2xl leading-tight"
-                    style={{
-                      fontFamily: "'Fraunces', Georgia, serif",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <span style={{ color: "#3d5a2a" }}>
-                      {equivalent.count}
-                    </span>{" "}
-                    {equivalent.label}
+                  <p style={{
+                    fontSize: 20, fontWeight: 600, color: BRAND.cardText,
+                    lineHeight: 1.3,
+                  }}>
+                    <span style={{ color: BRAND.dark, fontWeight: 700 }}>
+                      {equivalent.emoji}{" "}
+                    </span>
+                    {equivalent.format(equivalent.count)}
                   </p>
                 </div>
-              </div>
+              </Card>
             )}
 
-            {/* ----- MAP ----- */}
             <MapPanel originLabel={originLabel} />
 
-            {/* ----- PUBLIC TRANSPORT COMPARISON ----- */}
             <ComparisonPanel
               mode={mode}
               distanceKm={distanceKm}
               perPersonKg={perPersonKg}
             />
 
-            {/* ----- SAVE / EMAIL CAPTURE ----- */}
-            <SavePanel
-              mode={mode}
-              distanceKm={distanceKm}
-              origin={originLabel}
-              occupancy={occupancy}
-              totalKg={totalKg}
-              perPersonKg={perPersonKg}
-            />
-
-            <button
-              onClick={onRestart}
-              className="w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
-              style={{
-                backgroundColor: "#3d5a2a",
-                color: "#ffffff",
-                boxShadow: "0 10px 25px -8px rgba(61, 90, 42, 0.4)",
-              }}
-            >
-              Start over
-            </button>
+            <PrimaryButton onClick={onContinue}>
+              {isZero ? "Continue →" : "Save my results →"}
+            </PrimaryButton>
           </div>
         );
       }
 
       // ============================================================================
-      //  SAVE PANEL — email + name + company + consent
+      //  FOLLOWUP — yes/no
       // ============================================================================
-      /**
-       * Submits to the Apps Script proxy as a POST with action=save.
-       *
-       * Note: Apps Script doesn't accept arbitrary Content-Type headers from
-       * the browser without triggering a CORS preflight. We use
-       * `text/plain` (or no Content-Type at all) and JSON.stringify the body,
-       * which Apps Script can still parse from e.postData.contents — this is
-       * the standard Apps Script-from-browser pattern.
-       */
-      function SavePanel({
-        mode,
-        distanceKm,
-        origin,
-        occupancy,
-        totalKg,
-        perPersonKg,
+      function ScreenFollowup({ onYes, onNo }) {
+        return (
+          <div className="animate-fadeIn">
+            <p style={{
+              color: BRAND.lime, fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.15em", marginBottom: 6,
+            }}>
+              ONE MORE THING
+            </p>
+            <h1 style={{
+              fontSize: 30, fontWeight: 700, color: BRAND.white,
+              lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: 12,
+            }}>
+              Want a follow-up?
+            </h1>
+            <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 28, lineHeight: 1.5 }}>
+              We'll email your results plus practical tips on cutting your
+              footprint. No spam, ever.
+            </p>
+
+            <div className="space-y-3">
+              <BigChoiceButton onClick={onYes} primary>
+                <span style={{ fontSize: 28 }}>📩</span>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700 }}>Yes, email me</div>
+                  <div style={{ fontSize: 13, opacity: 0.85, marginTop: 2 }}>
+                    Get your report + tips
+                  </div>
+                </div>
+              </BigChoiceButton>
+
+              <BigChoiceButton onClick={onNo}>
+                <span style={{ fontSize: 28 }}>👋</span>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700 }}>No thanks</div>
+                  <div style={{ fontSize: 13, opacity: 0.85, marginTop: 2 }}>
+                    Skip and finish
+                  </div>
+                </div>
+              </BigChoiceButton>
+            </div>
+          </div>
+        );
+      }
+
+      function BigChoiceButton({ children, onClick, primary }) {
+        const [hover, setHover] = React.useState(false);
+        return (
+          <button
+            onClick={onClick}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 16,
+              padding: "18px 20px", borderRadius: 20, textAlign: "left",
+              backgroundColor: primary
+                ? (hover ? BRAND.limeDark : BRAND.lime)
+                : (hover ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"),
+              color: primary ? BRAND.white : BRAND.white,
+              border: primary ? "none" : "2px solid rgba(255,255,255,0.2)",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              transform: hover ? "translateY(-1px)" : "translateY(0)",
+            }}
+          >
+            {children}
+          </button>
+        );
+      }
+
+      // ============================================================================
+      //  DETAILS — collect name/company/email for follow-up
+      // ============================================================================
+      function ScreenDetails({
+        mode, fuel, size, ptType,
+        distanceKm, origin, occupancy, totalKg, perPersonKg,
+        onDone, onBack,
       }) {
         const [name, setName] = React.useState("");
         const [company, setCompany] = React.useState("");
         const [email, setEmail] = React.useState("");
-        const [subscribed, setSubscribed] = React.useState(true);
-        const [status, setStatus] = React.useState("idle"); // idle | sending | done | error
-        const [errorMsg, setErrorMsg] = React.useState("");
+        const [status, setStatus] = React.useState("idle");
+        const [errMsg, setErrMsg] = React.useState("");
 
         const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-        // Email required only if subscribed (per the brief). Otherwise email
-        // is optional but we still require *something* — name OR email —
-        // so we don't end up with totally blank rows.
-        const canSubmit = subscribed
-          ? emailValid
-          : (name.trim() || company.trim() || emailValid);
+        const canSubmit = emailValid;
 
         const submit = async () => {
           if (!canSubmit || status === "sending") return;
-          setStatus("sending");
-          setErrorMsg("");
+          setStatus("sending"); setErrMsg("");
           try {
             const res = await fetch(PROXY_URL, {
               method: "POST",
-              // text/plain avoids the CORS preflight that Apps Script can't handle.
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify({
                 action: "save",
                 name: name.trim(),
                 company: company.trim(),
                 email: email.trim(),
-                subscribed,
-                mode,
+                subscribed: true,
+                mode: modeDescription({ mode, fuel, size, ptType }),
                 distanceKm,
                 origin,
                 occupancy,
@@ -1141,227 +1166,135 @@
               }),
             });
             const data = await res.json();
-            if (data.status === "OK") {
-              setStatus("done");
-            } else {
-              setStatus("error");
-              setErrorMsg(data.error_message || "Couldn't save. Try again?");
-            }
+            if (data.status === "OK") onDone();
+            else { setStatus("error"); setErrMsg(data.error_message || "Couldn't save."); }
           } catch (err) {
-            setStatus("error");
-            setErrorMsg("Network error. Try again?");
+            setStatus("error"); setErrMsg("Network error. Try again?");
           }
         };
 
-        // ----- Success state -----
-        if (status === "done") {
-          return (
-            <div
-              className="mb-4 rounded-3xl p-6 text-center"
-              style={{
-                backgroundColor: "#e9f0df",
-                border: "1px solid #c8d4a8",
-              }}
-            >
-              <p className="text-3xl">✅</p>
-              <p
-                className="mt-2 text-xl leading-tight"
-                style={{
-                  fontFamily: "'Fraunces', Georgia, serif",
-                  fontWeight: 600,
-                  color: "#3d5a2a",
-                }}
-              >
-                Saved — thanks!
-              </p>
-              <p
-                className="mt-1 text-sm"
-                style={{ color: "#5a6650" }}
-              >
-                {subscribed
-                  ? "We'll send your results and a few tips on reducing your footprint."
-                  : "Your submission is in."}
-              </p>
-            </div>
-          );
-        }
-
-        // ----- Form -----
         return (
-          <div
-            className="mb-4 rounded-3xl p-6"
-            style={{
-              backgroundColor: "#ffffff",
-              boxShadow:
-                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-            }}
-          >
-            <p
-              className="text-xs uppercase tracking-widest"
-              style={{ color: "#8a9070" }}
-            >
-              Save your results
+          <div className="animate-fadeIn">
+            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
+              ← Back
+            </button>
+
+            <p style={{
+              color: BRAND.lime, fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.15em", marginBottom: 6,
+            }}>
+              YOUR DETAILS
             </p>
-            <p
-              className="mt-1 text-2xl leading-tight"
-              style={{
-                fontFamily: "'Fraunces', Georgia, serif",
-                fontWeight: 600,
-              }}
-            >
-              Want a follow-up? 📩
-            </p>
-            <p
-              className="mb-5 mt-2 text-sm"
-              style={{ color: "#5a6650" }}
-            >
-              We'll email your results plus a few tips on cutting your
-              footprint. Name &amp; company optional.
+            <h1 style={{
+              fontSize: 28, fontWeight: 700, color: BRAND.white,
+              lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: 12,
+            }}>
+              Where shall we send it?
+            </h1>
+            <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
+              Just an email is enough — name and company are optional.
             </p>
 
-            <div className="space-y-3">
-              <InputField
-                value={name}
-                onChange={setName}
-                placeholder="Name (optional)"
-                autoComplete="name"
-              />
-              <InputField
-                value={company}
-                onChange={setCompany}
-                placeholder="Company (optional)"
-                autoComplete="organization"
-              />
-              <InputField
-                value={email}
-                onChange={setEmail}
-                placeholder="Email"
-                type="email"
-                autoComplete="email"
-              />
-
-              <label
-                className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl p-3"
-                style={{ backgroundColor: "#f5f1e8" }}
-              >
-                <input
-                  type="checkbox"
-                  checked={subscribed}
-                  onChange={(e) => setSubscribed(e.target.checked)}
-                  style={{
-                    marginTop: 2,
-                    width: 18,
-                    height: 18,
-                    accentColor: "#3d5a2a",
-                    cursor: "pointer",
-                  }}
-                />
-                <span
-                  className="text-sm"
-                  style={{ color: "#5a6650", lineHeight: 1.4 }}
-                >
-                  Email me my results &amp; tips on reducing my carbon
-                  footprint.
-                </span>
-              </label>
+            <div className="space-y-3 mb-4">
+              <DetailInput value={name} onChange={setName} placeholder="Name (optional)" autoComplete="name" />
+              <DetailInput value={company} onChange={setCompany} placeholder="Company (optional)" autoComplete="organization" />
+              <DetailInput value={email} onChange={setEmail} placeholder="Email" type="email" autoComplete="email" required />
             </div>
 
-            {status === "error" && (
-              <div
-                className="mt-4 rounded-2xl p-3 text-sm"
-                style={{
-                  backgroundColor: "#fbe8e0",
-                  color: "#7a3520",
-                  border: "1px solid #f0c8b8",
-                }}
-              >
-                ⚠️ {errorMsg}
-              </div>
-            )}
+            {status === "error" && <ErrorBanner message={errMsg} />}
 
-            <button
+            <PrimaryButton
               onClick={submit}
               disabled={!canSubmit || status === "sending"}
-              className="mt-5 w-full rounded-full py-4 text-base font-medium transition-all active:scale-[0.98]"
-              style={{
-                backgroundColor:
-                  canSubmit && status !== "sending"
-                    ? "#3d5a2a"
-                    : "#d6cfb8",
-                color:
-                  canSubmit && status !== "sending"
-                    ? "#ffffff"
-                    : "#8a9070",
-                cursor:
-                  canSubmit && status !== "sending"
-                    ? "pointer"
-                    : "not-allowed",
-                boxShadow:
-                  canSubmit && status !== "sending"
-                    ? "0 10px 25px -8px rgba(61, 90, 42, 0.4)"
-                    : "none",
-              }}
+              loading={status === "sending"}
+              loadingLabel="Saving…"
             >
-              {status === "sending" ? (
-                <span className="inline-flex items-center justify-center gap-2">
-                  <span
-                    className="spinner inline-block"
-                    style={{
-                      width: 16,
-                      height: 16,
-                      border: "2px solid rgba(255,255,255,0.3)",
-                      borderTopColor: "#ffffff",
-                      borderRadius: "50%",
-                    }}
-                  />
-                  Saving…
-                </span>
-              ) : (
-                <>Save my results</>
-              )}
-            </button>
+              Send me the report →
+            </PrimaryButton>
           </div>
         );
       }
 
-      // Small reusable input — matches the rest of the design.
-      function InputField({
-        value,
-        onChange,
-        placeholder,
-        type = "text",
-        autoComplete,
-      }) {
+      function DetailInput({ value, onChange, placeholder, type = "text", autoComplete, required }) {
+        const [focused, setFocused] = React.useState(false);
         return (
           <input
             type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
+            placeholder={placeholder + (required ? " *" : "")}
             autoComplete={autoComplete}
-            className="w-full rounded-2xl px-4 py-3 text-base outline-none transition-all"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            className="w-full outline-none"
             style={{
-              backgroundColor: "#f5f1e8",
-              border: "1.5px solid transparent",
-              color: "#1e2a1e",
+              padding: "14px 18px",
+              borderRadius: 16,
+              fontSize: 16,
+              backgroundColor: BRAND.cream,
+              color: BRAND.cardText,
+              border: `2px solid ${focused ? BRAND.lime : "transparent"}`,
+              transition: "border-color 0.2s ease",
               fontFamily: "inherit",
             }}
-            onFocus={(e) => (e.target.style.borderColor = "#3d5a2a")}
-            onBlur={(e) => (e.target.style.borderColor = "transparent")}
           />
         );
       }
 
       // ============================================================================
-      //  COMPARISON PANEL — "what if you'd taken public transport?"
+      //  THANKS
       // ============================================================================
-      /**
-       * Shows the user how the same journey would compare by train and bus.
-       * Skipped entirely for cycle/walk (already zero) and for users who
-       * actually took public transport (they'd be comparing to themselves).
-       */
+      function ScreenThanks({ onRestart }) {
+        return (
+          <div className="animate-fadeIn" style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            textAlign: "center", paddingTop: 40,
+          }}>
+            <div style={{
+              width: 96, height: 96, borderRadius: "50%",
+              backgroundColor: BRAND.lime, display: "flex",
+              alignItems: "center", justifyContent: "center",
+              marginBottom: 24, fontSize: 48,
+              animation: "pop 0.5s ease",
+            }}>
+              🌱
+            </div>
+            <h1 style={{
+              fontSize: 32, fontWeight: 700, color: BRAND.white,
+              lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 12,
+            }}>
+              Thank you!
+            </h1>
+            <p style={{
+              color: BRAND.muted, fontSize: 15, marginBottom: 36,
+              maxWidth: 320, lineHeight: 1.5,
+            }}>
+              Every footprint counts. Small changes add up — and we're glad
+              you took 60 seconds to find out yours.
+            </p>
+
+            <button
+              onClick={onRestart}
+              style={{
+                padding: "14px 32px", borderRadius: 9999,
+                backgroundColor: "rgba(255,255,255,0.1)",
+                color: BRAND.white, fontSize: 15, fontWeight: 600,
+                border: `2px solid ${BRAND.lime}`,
+                cursor: "pointer", transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BRAND.lime}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
+            >
+              Calculate another →
+            </button>
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  COMPARISON PANEL — public transport alternative
+      // ============================================================================
       function ComparisonPanel({ mode, distanceKm, perPersonKg }) {
-        // Hide for modes where it doesn't make sense.
         if (mode === "cycleWalk" || mode === "publicTransport") return null;
         if (!distanceKm || distanceKm <= 0) return null;
 
@@ -1370,152 +1303,84 @@
         const bestKg = Math.min(railKg, busKg);
         const saving = perPersonKg - bestKg;
         const savingPct = Math.round((saving / perPersonKg) * 100);
-        const cleanerMode = railKg < busKg ? "train" : "bus";
-        const cleanerEmoji = cleanerMode === "train" ? "🚆" : "🚌";
-
-        const isPositiveSaving = saving > 0;
+        const cleaner = railKg < busKg ? "train" : "bus";
+        const emoji = cleaner === "train" ? "🚆" : "🚌";
 
         return (
-          <div
-            className="mb-4 rounded-3xl p-6"
-            style={{
-              backgroundColor: "#ffffff",
-              boxShadow:
-                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-            }}
-          >
-            <p
-              className="text-xs uppercase tracking-widest"
-              style={{ color: "#8a9070" }}
-            >
-              What if you'd
+          <Card>
+            <p style={{
+              fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
+              letterSpacing: "0.15em", marginBottom: 4,
+            }}>
+              WHAT IF YOU'D
             </p>
-            <p
-              className="mt-1 text-2xl leading-tight"
-              style={{
-                fontFamily: "'Fraunces', Georgia, serif",
-                fontWeight: 600,
-              }}
-            >
-              taken the {cleanerMode}? {cleanerEmoji}
+            <p style={{
+              fontSize: 22, fontWeight: 700, color: BRAND.cardText,
+              lineHeight: 1.15, marginBottom: 16,
+            }}>
+              taken the {cleaner}? {emoji}
             </p>
 
-            {/* Two-column comparison */}
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: "#f5f1e8" }}
-              >
-                <p
-                  className="text-[11px] uppercase tracking-wider"
-                  style={{ color: "#8a9070" }}
-                >
-                  🚆 Train
-                </p>
-                <p
-                  className="mt-1 text-xl leading-none"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                    color: "#3d5a2a",
-                  }}
-                >
-                  {railKg.toFixed(2)}{" "}
-                  <span
-                    className="text-xs"
-                    style={{ color: "#6b7a4f" }}
-                  >
-                    kg
-                  </span>
-                </p>
-              </div>
-              <div
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: "#f5f1e8" }}
-              >
-                <p
-                  className="text-[11px] uppercase tracking-wider"
-                  style={{ color: "#8a9070" }}
-                >
-                  🚌 Bus
-                </p>
-                <p
-                  className="mt-1 text-xl leading-none"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                    color: "#3d5a2a",
-                  }}
-                >
-                  {busKg.toFixed(2)}{" "}
-                  <span
-                    className="text-xs"
-                    style={{ color: "#6b7a4f" }}
-                  >
-                    kg
-                  </span>
-                </p>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <MiniStat label="🚆 Train" value={railKg.toFixed(2)} unit="kg" />
+              <MiniStat label="🚌 Bus" value={busKg.toFixed(2)} unit="kg" />
             </div>
 
-            {/* Savings line */}
-            {isPositiveSaving && (
-              <div
-                className="mt-4 rounded-2xl p-4"
-                style={{
-                  backgroundColor: "#e9f0df",
-                  border: "1px solid #c8d4a8",
-                }}
-              >
-                <p
-                  className="text-[11px] uppercase tracking-wider"
-                  style={{ color: "#6b7a4f" }}
-                >
-                  You could've saved
+            {saving > 0 && (
+              <div style={{
+                marginTop: 14, padding: 14, borderRadius: 14,
+                backgroundColor: "#e9f0df", border: "1px solid #c8d4a8",
+              }}>
+                <p style={{
+                  fontSize: 11, fontWeight: 700, color: BRAND.dark,
+                  letterSpacing: "0.15em", marginBottom: 4,
+                }}>
+                  YOU COULD'VE SAVED
                 </p>
-                <p
-                  className="mt-1 text-xl leading-tight"
-                  style={{
-                    fontFamily: "'Fraunces', Georgia, serif",
-                    fontWeight: 600,
-                    color: "#3d5a2a",
-                  }}
-                >
+                <p style={{
+                  fontSize: 20, fontWeight: 700, color: BRAND.dark, lineHeight: 1.2,
+                }}>
                   {saving.toFixed(2)} kg CO₂e
-                  {!isNaN(savingPct) && savingPct > 0 && (
-                    <span
-                      className="ml-2 text-sm font-normal"
-                      style={{ color: "#6b7a4f" }}
-                    >
+                  {savingPct > 0 && (
+                    <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.cardSubtle, marginLeft: 8 }}>
                       ({savingPct}% less)
                     </span>
                   )}
                 </p>
               </div>
             )}
-          </div>
+          </Card>
         );
       }
 
       // ============================================================================
-      //  MAP PANEL — Maps Static API (flat image, no UI chrome)
+      //  MAP PANEL — real route polyline via Apps Script Directions proxy
       // ============================================================================
-      /**
-       * Maps Static API returns a flat PNG with no overlay UI — no address card,
-       * no duration ribbons, no zoom controls. Just the map.
-       *
-       *  - If we have an origin postcode → two markers + a straight line between
-       *    them. Map auto-zooms to include both.
-       *  - Otherwise → a single marker on the event location.
-       *
-       * Styling: muted greens/creams to match the app aesthetic. The `style=`
-       * params are URL-encoded styling rules from Google's Maps Static API.
-       * Docs: https://developers.google.com/maps/documentation/maps-static/styling
-       */
       function MapPanel({ originLabel }) {
         const hasOrigin = originLabel && originLabel.trim().length > 0;
+        const [polyline, setPolyline] = React.useState(null);
+        const [loadingRoute, setLoadingRoute] = React.useState(hasOrigin);
 
-        // Custom map style: soft, muted, matches our cream/green palette.
+        React.useEffect(() => {
+          if (!hasOrigin) return;
+          let cancelled = false;
+          (async () => {
+            try {
+              const url = PROXY_URL +
+                "?action=directions" +
+                "&origin=" + encodeURIComponent(originLabel + ", UK") +
+                "&destination=" + encodeURIComponent(EVENT_LOCATION);
+              const res = await fetch(url);
+              const data = await res.json();
+              if (!cancelled && data.status === "OK" && data.polyline) {
+                setPolyline(data.polyline);
+              }
+            } catch {}
+            finally { if (!cancelled) setLoadingRoute(false); }
+          })();
+          return () => { cancelled = true; };
+        }, [originLabel, hasOrigin]);
+
         const mapStyle = [
           "feature:all|element:labels.text.fill|color:0x5a6650",
           "feature:all|element:labels.text.stroke|color:0xf5f1e8|weight:2",
@@ -1527,59 +1392,191 @@
           "feature:transit|visibility:off",
           "feature:administrative|element:geometry.stroke|color:0xd6cfb8",
         ];
-        const styleParams = mapStyle
-          .map((s) => "&style=" + encodeURIComponent(s))
-          .join("");
+        const styleParams = mapStyle.map((s) => "&style=" + encodeURIComponent(s)).join("");
 
-        // Markers — green dots, no labels.
-        const destMarker =
-          "color:0x3d5a2a|" + encodeURIComponent(EVENT_LOCATION);
+        const destMarker = "color:0x00544F|" + encodeURIComponent(EVENT_LOCATION);
 
         let src;
         if (hasOrigin) {
           const origin = originLabel + ", UK";
-          const originMarker =
-            "color:0x3d5a2a|" + encodeURIComponent(origin);
-
-          // Straight line between origin and destination.
-          const path =
-            "color:0x3d5a2aff|weight:4|geodesic:true|" +
-            encodeURIComponent(origin) +
-            "|" +
-            encodeURIComponent(EVENT_LOCATION);
-
+          const originMarker = "color:0x85BE00|" + encodeURIComponent(origin);
+          const path = polyline
+            ? "color:0x00544Fff|weight:4|enc:" + polyline
+            : "color:0x00544Fff|weight:4|geodesic:true|" +
+              encodeURIComponent(origin) + "|" +
+              encodeURIComponent(EVENT_LOCATION);
           src =
             "https://maps.googleapis.com/maps/api/staticmap" +
             "?size=600x300&scale=2" +
             "&markers=" + originMarker +
             "&markers=" + destMarker +
             "&path=" + path +
-            styleParams +
-            "&key=" + MAPS_KEY;
+            styleParams + "&key=" + MAPS_KEY;
         } else {
           src =
             "https://maps.googleapis.com/maps/api/staticmap" +
             "?size=600x300&scale=2&zoom=12" +
             "&markers=" + destMarker +
-            styleParams +
-            "&key=" + MAPS_KEY;
+            styleParams + "&key=" + MAPS_KEY;
         }
 
         return (
-          <div
-            className="mb-4 overflow-hidden rounded-3xl"
-            style={{
-              backgroundColor: "#ffffff",
-              boxShadow:
-                "0 2px 0 rgba(30,42,30,0.06), 0 8px 24px -12px rgba(30,42,30,0.18)",
-            }}
-          >
+          <div style={{
+            marginBottom: 16, borderRadius: 20, overflow: "hidden",
+            backgroundColor: BRAND.cream, position: "relative",
+            boxShadow: "0 4px 12px -4px rgba(0,0,0,0.15)",
+          }}>
             <img
               src={src}
               alt={hasOrigin ? "Route map" : "Event location map"}
               style={{ display: "block", width: "100%", height: "auto" }}
               loading="lazy"
             />
+            {loadingRoute && (
+              <div style={{
+                position: "absolute", top: 12, right: 12,
+                backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 9999,
+                padding: "5px 12px", fontSize: 11, color: BRAND.cardSubtle,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <span className="spinner inline-block" style={{
+                  width: 10, height: 10,
+                  border: `1.5px solid rgba(0,84,79,0.3)`,
+                  borderTopColor: BRAND.dark, borderRadius: "50%",
+                }}/>
+                Loading route
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ============================================================================
+      //  SHARED UI HELPERS
+      // ============================================================================
+      function Card({ children }) {
+        return (
+          <div style={{
+            backgroundColor: BRAND.cream, color: BRAND.cardText,
+            borderRadius: 20, padding: 20, marginBottom: 16,
+            boxShadow: "0 4px 12px -4px rgba(0,0,0,0.15)",
+          }}>
+            {children}
+          </div>
+        );
+      }
+
+      function Stat({ label, value, unit, highlight, align = "left" }) {
+        return (
+          <div style={{ textAlign: align }}>
+            <p style={{
+              fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
+              letterSpacing: "0.15em",
+            }}>
+              {label.toUpperCase()}
+            </p>
+            <p style={{
+              fontSize: 28, fontWeight: 700, lineHeight: 1,
+              color: highlight ? BRAND.dark : BRAND.cardText, marginTop: 4,
+              letterSpacing: "-0.02em",
+            }}>
+              {value} <span style={{ fontSize: 14, color: BRAND.cardSubtle, fontWeight: 500 }}>{unit}</span>
+            </p>
+          </div>
+        );
+      }
+
+      function MiniStat({ label, value, unit }) {
+        return (
+          <div style={{
+            backgroundColor: "#f5f1e8", borderRadius: 14, padding: 12,
+          }}>
+            <p style={{
+              fontSize: 10, fontWeight: 700, color: BRAND.cardLabel,
+              letterSpacing: "0.1em", marginBottom: 4,
+            }}>
+              {label.toUpperCase()}
+            </p>
+            <p style={{
+              fontSize: 20, fontWeight: 700, color: BRAND.dark, lineHeight: 1,
+            }}>
+              {value} <span style={{ fontSize: 12, color: BRAND.cardSubtle, fontWeight: 500 }}>{unit}</span>
+            </p>
+          </div>
+        );
+      }
+
+      function Toggle({ value, onChange, options, small }) {
+        return (
+          <div style={{
+            display: "inline-flex", padding: 4, borderRadius: 9999,
+            backgroundColor: "rgba(255,255,255,0.1)",
+          }}>
+            {options.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => onChange(o.value)}
+                style={{
+                  padding: small ? "6px 16px" : "8px 18px",
+                  borderRadius: 9999, fontSize: small ? 13 : 14, fontWeight: 600,
+                  backgroundColor: value === o.value ? BRAND.lime : "transparent",
+                  color: value === o.value ? BRAND.white : BRAND.muted,
+                  border: "none", cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        );
+      }
+
+      function PrimaryButton({ children, onClick, disabled, loading, loadingLabel }) {
+        return (
+          <button
+            onClick={onClick}
+            disabled={disabled || loading}
+            style={{
+              width: "100%", padding: "16px 24px", borderRadius: 9999,
+              fontSize: 16, fontWeight: 700,
+              backgroundColor: (disabled && !loading) ? "rgba(255,255,255,0.15)" : BRAND.lime,
+              color: (disabled && !loading) ? BRAND.muted : BRAND.white,
+              cursor: (disabled || loading) ? "not-allowed" : "pointer",
+              border: "none",
+              boxShadow: (disabled || loading) ? "none" : "0 10px 25px -8px rgba(133,190,0,0.5)",
+              transition: "all 0.2s ease",
+              letterSpacing: "-0.01em",
+            }}
+            onMouseEnter={(e) => {
+              if (!disabled && !loading) e.currentTarget.style.backgroundColor = BRAND.limeDark;
+            }}
+            onMouseLeave={(e) => {
+              if (!disabled && !loading) e.currentTarget.style.backgroundColor = BRAND.lime;
+            }}
+          >
+            {loading ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+                <span className="spinner inline-block" style={{
+                  width: 16, height: 16,
+                  border: "2px solid rgba(255,255,255,0.4)",
+                  borderTopColor: BRAND.white, borderRadius: "50%",
+                }}/>
+                {loadingLabel || "Loading…"}
+              </span>
+            ) : children}
+          </button>
+        );
+      }
+
+      function ErrorBanner({ message }) {
+        return (
+          <div style={{
+            marginBottom: 16, padding: 12, borderRadius: 14,
+            backgroundColor: "#fbe8e0", color: "#7a3520",
+            border: "1px solid #f0c8b8", fontSize: 13,
+          }}>
+            ⚠️ {message}
           </div>
         );
       }
