@@ -36,6 +36,9 @@
         font-family: "Inter", system-ui, -apple-system, sans-serif;
         -webkit-font-smoothing: antialiased;
         color: #ffffff;
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100vw;
       }
       input[type="number"]::-webkit-outer-spin-button,
       input[type="number"]::-webkit-inner-spin-button {
@@ -426,26 +429,21 @@
             minHeight: "100vh",
             backgroundColor: BRAND.dark,
             color: BRAND.white,
-            position: "relative",
-            overflow: "hidden",
+            width: "100%",
+            overflowX: "hidden",
           }}>
-            {/* Subtle decorative leaf in background */}
-            <div style={{
-              position: "absolute",
-              top: -120, right: -120,
-              width: 400, height: 400,
-              backgroundImage:
-                "radial-gradient(circle, rgba(133,190,0,0.08) 0%, transparent 70%)",
-              pointerEvents: "none",
-            }}/>
-
             <div
-              className="relative flex min-h-screen flex-col px-5 pb-10 pt-5"
+              className="relative flex min-h-screen flex-col"
               style={{
                 maxWidth: 480,
                 marginLeft: "auto",
                 marginRight: "auto",
                 width: "100%",
+                boxSizing: "border-box",
+                paddingLeft: 20,
+                paddingRight: 20,
+                paddingTop: 20,
+                paddingBottom: 40,
               }}
             >
               {/* ---- HEADER ---- */}
