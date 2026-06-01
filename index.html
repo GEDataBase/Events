@@ -439,7 +439,15 @@
               pointerEvents: "none",
             }}/>
 
-            <div className="relative mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10 pt-5">
+            <div
+              className="relative flex min-h-screen flex-col px-5 pb-10 pt-5"
+              style={{
+                maxWidth: 480,
+                marginLeft: "auto",
+                marginRight: "auto",
+                width: "100%",
+              }}
+            >
               {/* ---- HEADER ---- */}
               <Header
                 currentStep={currentStep}
@@ -684,7 +692,7 @@
             onClick={onClick}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
-            className="group relative flex aspect-square flex-col items-start justify-between p-4 text-left"
+            className="group relative aspect-square"
             style={{
               backgroundColor: BRAND.cream,
               borderRadius: 20,
@@ -696,10 +704,18 @@
               transition: "all 0.2s ease",
               cursor: "pointer",
               animation: `fadeUp 0.4s ease ${index * 60}ms backwards`,
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              gap: 12,
             }}
           >
             <span style={{
-              fontSize: 44,
+              fontSize: 52,
+              lineHeight: 1,
               transform: hover ? "scale(1.1) rotate(-3deg)" : "scale(1)",
               transition: "transform 0.25s ease",
               display: "inline-block",
@@ -716,7 +732,8 @@
               {option.sublabel && (
                 <div style={{
                   fontSize: 10, fontWeight: 600, color: BRAND.cardLabel,
-                  letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 3,
+                  letterSpacing: "0.1em", textTransform: "uppercase",
+                  marginTop: 4,
                 }}>
                   {option.sublabel}
                 </div>
