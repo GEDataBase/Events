@@ -160,21 +160,21 @@
       const EQUIVALENTS = [
         {
           unit: "kettle boils",
-          emoji: "🫖",
+          emoji: "",
           format: (n) => `boiling the kettle ${n} ${n === 1 ? "time" : "times"}`,
           perKg: 1 / 0.045,
           idealMin: 1, idealMax: 80,
         },
         {
           unit: "TV hours",
-          emoji: "📺",
+          emoji: "",
           format: (n) => `running a TV for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.011,
           idealMin: 1, idealMax: 200,
         },
         {
           unit: "home hours",
-          emoji: "🏠",
+          emoji: "",
           format: (n) => `powering an average UK home for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.85,
           idealMin: 1, idealMax: 100,
@@ -236,10 +236,10 @@
       ];
 
       const FUEL_OPTIONS = [
-        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "Unleaded" },
+        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "" },
         { id: "diesel",   label: "Diesel",   emoji: "🛢️", sublabel: "" },
         { id: "electric", label: "Electric", emoji: "⚡", sublabel: "Battery EV" },
-        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "Petrol + electric" },
+        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "fuel + electric" },
       ];
 
       const CAR_SIZE_OPTIONS = [
@@ -1020,7 +1020,7 @@
                     padding: "8px 12px", fontSize: 12, color: BRAND.cardSubtle,
                     display: "flex", alignItems: "center", gap: 6, marginBottom: 16,
                   }}>
-                    <span>👥</span>
+                    <span></span>
                     <span>Shared between {occupancy} {occupancy === 1 ? "person" : "people"}</span>
                   </div>
                 )}
@@ -1203,7 +1203,7 @@
                 Where shall we send it?
               </h1>
               <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
-                Just an email is enough — name and company are optional.
+                Just your email is enough to send your results, your name and company are optional.
               </p>
             </div>
 
@@ -1321,7 +1321,7 @@
         const saving = perPersonKg - bestKg;
         const savingPct = Math.round((saving / perPersonKg) * 100);
         const cleaner = railKg < busKg ? "train" : "bus";
-        const emoji = cleaner === "train" ? "🚆" : "🚌";
+        const emoji = cleaner === "train" ? "" : "";
 
         return (
           <Card>
@@ -1339,8 +1339,8 @@
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <MiniStat label="🚆 Train" value={railKg.toFixed(2)} unit="kg" />
-              <MiniStat label="🚌 Bus" value={busKg.toFixed(2)} unit="kg" />
+              <MiniStat label="Train" value={railKg.toFixed(2)} unit="kg" />
+              <MiniStat label="Bus" value={busKg.toFixed(2)} unit="kg" />
             </div>
 
             {saving > 0 && (
