@@ -160,21 +160,21 @@
       const EQUIVALENTS = [
         {
           unit: "kettle boils",
-          emoji: "🫖",
-          format: (n) => `boiling the kettle ${n} ${n === 1 ? "time" : "times"}`,
+          emoji: "",
+          format: (n) => `boiling a full kettle ${n} ${n === 1 ? "time" : "times"}`,
           perKg: 1 / 0.045,
           idealMin: 1, idealMax: 80,
         },
         {
           unit: "TV hours",
-          emoji: "📺",
+          emoji: "",
           format: (n) => `running a TV for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.011,
           idealMin: 1, idealMax: 200,
         },
         {
           unit: "home hours",
-          emoji: "🏠",
+          emoji: "",
           format: (n) => `powering an average UK home for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.85,
           idealMin: 1, idealMax: 100,
@@ -229,17 +229,17 @@
           id: "cycleWalk",
           label: "Cycle or walk",
           emoji: "🚴",
-          sublabel: "Zero emissions, hero",
+          sublabel: "No Fuel, Zero emissions",
           steps: [],
           needsOccupancy: false,
         },
       ];
 
       const FUEL_OPTIONS = [
-        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "Unleaded" },
+        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "" },
         { id: "diesel",   label: "Diesel",   emoji: "🛢️", sublabel: "" },
-        { id: "electric", label: "Electric", emoji: "⚡", sublabel: "Battery EV" },
-        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "Petrol + electric" },
+        { id: "electric", label: "Electric", emoji: "⚡", sublabel: "" },
+        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "" },
       ];
 
       const CAR_SIZE_OPTIONS = [
@@ -839,7 +839,7 @@
                     color: BRAND.muted, fontSize: 12, marginTop: 10,
                     textAlign: "center",
                   }}>
-                    🗺️ We'll calculate driving distance to the event.
+                    We'll calculate your driving distance to the event.
                   </p>
                 </div>
 
@@ -1058,7 +1058,7 @@
                     fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
                     letterSpacing: "0.15em", marginBottom: 8,
                   }}>
-                    THAT'S ABOUT THE SAME AS
+                    THIS IS EQUIVALENT TO
                   </p>
                   <p style={{
                     fontSize: 20, fontWeight: 600, color: BRAND.cardText,
@@ -1231,7 +1231,7 @@
                 Where shall we send it?
               </h1>
               <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
-                Just an email is enough — name and company are optional.
+                Just your email is enough to send your results, your name and company are optional.
               </p>
             </div>
 
@@ -1303,13 +1303,13 @@
               fontSize: 32, fontWeight: 700, color: BRAND.white,
               lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 12,
             }}>
-              Thank you!
+              Thank you for your time!
             </h1>
             <p style={{
               color: BRAND.muted, fontSize: 15, marginBottom: 36,
               maxWidth: 320, lineHeight: 1.5,
             }}>
-              Every footprint counts. Small changes add up — and we're glad
+              Every footprint counts. Small changes add up, and we're glad
               you took 60 seconds to find out yours.
             </p>
 
@@ -1352,7 +1352,7 @@
               fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
               letterSpacing: "0.15em", marginBottom: 4,
             }}>
-              WHAT IF YOU'D
+              WHAT IF YOU HAD
             </p>
             <p style={{
               fontSize: 22, fontWeight: 700, color: BRAND.cardText,
@@ -1362,8 +1362,8 @@
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <MiniStat label="🚆 Train" value={railKg.toFixed(2)} unit="kg" />
-              <MiniStat label="🚌 Bus" value={busKg.toFixed(2)} unit="kg" />
+              <MiniStat label="Train" value={railKg.toFixed(2)} unit="kg" />
+              <MiniStat label="Bus" value={busKg.toFixed(2)} unit="kg" />
             </div>
 
             {saving > 0 && (
@@ -1375,7 +1375,7 @@
                   fontSize: 11, fontWeight: 700, color: BRAND.dark,
                   letterSpacing: "0.15em", marginBottom: 4,
                 }}>
-                  YOU COULD'VE SAVED
+                  YOU COULD HAVE REDUCED YOUR EMISSIONS BY:
                 </p>
                 <p style={{
                   fontSize: 20, fontWeight: 700, color: BRAND.dark, lineHeight: 1.2,
