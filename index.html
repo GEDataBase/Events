@@ -160,21 +160,21 @@
       const EQUIVALENTS = [
         {
           unit: "kettle boils",
-          emoji: "",
-          format: (n) => `boiling a full kettle ${n} ${n === 1 ? "time" : "times"}`,
+          emoji: "🫖",
+          format: (n) => `boiling the kettle ${n} ${n === 1 ? "time" : "times"}`,
           perKg: 1 / 0.045,
           idealMin: 1, idealMax: 80,
         },
         {
           unit: "TV hours",
-          emoji: "",
+          emoji: "📺",
           format: (n) => `running a TV for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.011,
           idealMin: 1, idealMax: 200,
         },
         {
           unit: "home hours",
-          emoji: "",
+          emoji: "🏠",
           format: (n) => `powering an average UK home for ${n} ${n === 1 ? "hour" : "hours"}`,
           perKg: 1 / 0.85,
           idealMin: 1, idealMax: 100,
@@ -229,17 +229,17 @@
           id: "cycleWalk",
           label: "Cycle or walk",
           emoji: "🚴",
-          sublabel: "No Fuel, Zero emissions",
+          sublabel: "Zero emissions, hero",
           steps: [],
           needsOccupancy: false,
         },
       ];
 
       const FUEL_OPTIONS = [
-        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "" },
+        { id: "petrol",   label: "Petrol",   emoji: "⛽", sublabel: "Unleaded" },
         { id: "diesel",   label: "Diesel",   emoji: "🛢️", sublabel: "" },
-        { id: "electric", label: "Electric", emoji: "⚡", sublabel: "" },
-        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "" },
+        { id: "electric", label: "Electric", emoji: "⚡", sublabel: "Battery EV" },
+        { id: "hybrid",   label: "Hybrid",   emoji: "🔋", sublabel: "Petrol + electric" },
       ];
 
       const CAR_SIZE_OPTIONS = [
@@ -587,23 +587,11 @@
       function Header({ currentStep, totalSteps, showProgress }) {
         return (
           <header className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Leaf size={28} />
-              <div>
-                <div style={{
-                  fontSize: 16, fontWeight: 700, color: BRAND.white,
-                  letterSpacing: "-0.01em", lineHeight: 1,
-                }}>
-                  Greener Edge
-                </div>
-                <div style={{
-                  fontSize: 9, fontWeight: 700, color: BRAND.lime,
-                  letterSpacing: "0.15em", marginTop: 2,
-                }}>
-                  CARBON CALCULATOR
-                </div>
-              </div>
-            </div>
+            <img
+              src="logo.png"
+              alt="Greener Edge Sustainability"
+              style={{ height: 44, width: "auto", display: "block" }}
+            />
 
             {showProgress && (
               <div className="flex items-center gap-2 text-xs"
@@ -623,22 +611,6 @@
               </div>
             )}
           </header>
-        );
-      }
-
-      // Small inline-SVG version of the leaf logo so we don't need an external asset.
-      function Leaf({ size = 28 }) {
-        return (
-          <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-            <path
-              d="M75 15 C 60 15, 35 25, 25 50 C 18 68, 25 82, 35 85 L 50 60 Z M 75 15 C 80 35, 75 60, 50 60"
-              stroke={BRAND.lime} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"
-              fill="none"
-            />
-            <path d="M 50 60 L 40 80" stroke={BRAND.lime} strokeWidth="4" strokeLinecap="round"/>
-            <path d="M 55 45 L 45 50" stroke={BRAND.lime} strokeWidth="3" strokeLinecap="round"/>
-            <path d="M 60 30 L 50 35" stroke={BRAND.lime} strokeWidth="3" strokeLinecap="round"/>
-          </svg>
         );
       }
 
@@ -839,7 +811,7 @@
                     color: BRAND.muted, fontSize: 12, marginTop: 10,
                     textAlign: "center",
                   }}>
-                    We'll calculate your driving distance to the event.
+                    🗺️ We'll calculate driving distance to the event.
                   </p>
                 </div>
 
@@ -1058,7 +1030,7 @@
                     fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
                     letterSpacing: "0.15em", marginBottom: 8,
                   }}>
-                    THIS IS EQUIVALENT TO
+                    THAT'S ABOUT THE SAME AS
                   </p>
                   <p style={{
                     fontSize: 20, fontWeight: 600, color: BRAND.cardText,
@@ -1231,7 +1203,7 @@
                 Where shall we send it?
               </h1>
               <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
-                Just your email is enough to send your results, your name and company are optional.
+                Just an email is enough — name and company are optional.
               </p>
             </div>
 
@@ -1292,24 +1264,29 @@
           }}>
             <div style={{
               width: 96, height: 96, borderRadius: "50%",
-              backgroundColor: BRAND.lime, display: "flex",
+              backgroundColor: BRAND.dark, display: "flex",
               alignItems: "center", justifyContent: "center",
-              marginBottom: 24, fontSize: 48,
+              marginBottom: 24, overflow: "hidden",
+              border: `3px solid ${BRAND.lime}`,
               animation: "pop 0.5s ease",
             }}>
-              🌱
+              <img
+                src="LogoOnly.jpg"
+                alt="Greener Edge"
+                style={{ width: "80%", height: "80%", objectFit: "contain" }}
+              />
             </div>
             <h1 style={{
               fontSize: 32, fontWeight: 700, color: BRAND.white,
               lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 12,
             }}>
-              Thank you for your time!
+              Thank you!
             </h1>
             <p style={{
               color: BRAND.muted, fontSize: 15, marginBottom: 36,
               maxWidth: 320, lineHeight: 1.5,
             }}>
-              Every footprint counts. Small changes add up, and we're glad
+              Every footprint counts. Small changes add up — and we're glad
               you took 60 seconds to find out yours.
             </p>
 
@@ -1344,7 +1321,7 @@
         const saving = perPersonKg - bestKg;
         const savingPct = Math.round((saving / perPersonKg) * 100);
         const cleaner = railKg < busKg ? "train" : "bus";
-        const emoji = cleaner === "train" ? "" : "";
+        const emoji = cleaner === "train" ? "🚆" : "🚌";
 
         return (
           <Card>
@@ -1352,7 +1329,7 @@
               fontSize: 11, fontWeight: 700, color: BRAND.cardLabel,
               letterSpacing: "0.15em", marginBottom: 4,
             }}>
-              WHAT IF YOU HAD
+              WHAT IF YOU'D
             </p>
             <p style={{
               fontSize: 22, fontWeight: 700, color: BRAND.cardText,
@@ -1362,8 +1339,8 @@
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <MiniStat label="Train" value={railKg.toFixed(2)} unit="kg" />
-              <MiniStat label="Bus" value={busKg.toFixed(2)} unit="kg" />
+              <MiniStat label="🚆 Train" value={railKg.toFixed(2)} unit="kg" />
+              <MiniStat label="🚌 Bus" value={busKg.toFixed(2)} unit="kg" />
             </div>
 
             {saving > 0 && (
@@ -1375,7 +1352,7 @@
                   fontSize: 11, fontWeight: 700, color: BRAND.dark,
                   letterSpacing: "0.15em", marginBottom: 4,
                 }}>
-                  YOU COULD HAVE REDUCED YOUR EMISSIONS BY:
+                  YOU COULD'VE SAVED
                 </p>
                 <p style={{
                   fontSize: 20, fontWeight: 700, color: BRAND.dark, lineHeight: 1.2,
