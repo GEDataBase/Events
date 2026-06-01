@@ -1344,7 +1344,7 @@
         const saving = perPersonKg - bestKg;
         const savingPct = Math.round((saving / perPersonKg) * 100);
         const cleaner = railKg < busKg ? "train" : "bus";
-        const emoji = cleaner === "train" ? "🚆" : "🚌";
+        const emoji = cleaner === "train" ? "" : "";
 
         return (
           <Card>
