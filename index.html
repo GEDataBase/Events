@@ -649,12 +649,12 @@
       // ============================================================================
       function ScreenPicker({ eyebrow, title, subtitle, options, onSelect, onBack }) {
         return (
-          <div className="animate-fadeIn">
+          <div className="animate-fadeIn" style={{ textAlign: "center" }}>
             {onBack && (
               <button
                 onClick={onBack}
-                className="mb-4 text-sm"
-                style={{ color: BRAND.lime }}
+                className="text-sm"
+                style={{ color: BRAND.lime, display: "block", margin: "0 auto 16px" }}
               >
                 ← Back
               </button>
@@ -780,8 +780,12 @@
         };
 
         return (
-          <div className="animate-fadeIn">
-            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
+          <div className="animate-fadeIn" style={{ textAlign: "center" }}>
+            <button
+              onClick={onBack}
+              className="mb-4 text-sm"
+              style={{ color: BRAND.lime, display: "block", margin: "0 auto 16px" }}
+            >
               ← Back
             </button>
 
@@ -795,21 +799,24 @@
               We'll work out the distance.
             </p>
 
-            <Toggle
-              value={tab}
-              onChange={(v) => { setTab(v); setError(null); }}
-              options={[
-                { value: "postcode", label: "Use my postcode" },
-                { value: "manual",   label: "I know my distance" },
-              ]}
-            />
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+              <Toggle
+                value={tab}
+                onChange={(v) => { setTab(v); setError(null); }}
+                options={[
+                  { value: "postcode", label: "Use my postcode" },
+                  { value: "manual",   label: "I know my distance" },
+                ]}
+              />
+            </div>
 
             {tab === "postcode" && (
-              <div className="animate-fadeIn mt-6">
+              <div className="animate-fadeIn" style={{ marginTop: 24, textAlign: "left" }}>
                 <div className="mb-6">
                   <label style={{
                     color: BRAND.lime, fontSize: 11, fontWeight: 700,
                     letterSpacing: "0.15em", display: "block", marginBottom: 8,
+                    textAlign: "center",
                   }}>
                     YOUR POSTCODE
                   </label>
@@ -825,12 +832,15 @@
                       className="w-full bg-transparent outline-none"
                       style={{
                         fontSize: 36, fontWeight: 600, color: BRAND.white,
-                        letterSpacing: "0.04em",
+                        letterSpacing: "0.04em", textAlign: "center",
                       }}
                       autoFocus
                     />
                   </div>
-                  <p style={{ color: BRAND.muted, fontSize: 12, marginTop: 10 }}>
+                  <p style={{
+                    color: BRAND.muted, fontSize: 12, marginTop: 10,
+                    textAlign: "center",
+                  }}>
                     🗺️ We'll calculate driving distance to the event.
                   </p>
                 </div>
@@ -849,8 +859,8 @@
             )}
 
             {tab === "manual" && (
-              <div className="animate-fadeIn mt-6">
-                <div className="mb-6">
+              <div className="animate-fadeIn" style={{ marginTop: 24, textAlign: "left" }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
                   <Toggle
                     value={unit}
                     onChange={setUnit}
@@ -863,15 +873,18 @@
                 </div>
 
                 <div className="mb-8" style={{ borderBottom: `2px solid ${BRAND.lime}`, paddingBottom: 10 }}>
-                  <div className="flex items-baseline gap-3">
+                  <div className="flex items-baseline justify-center gap-3">
                     <input
                       type="number" inputMode="decimal"
                       value={distance}
                       onChange={(e) => setDistance(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && submitManual()}
                       placeholder="0"
-                      className="w-full bg-transparent outline-none"
-                      style={{ fontSize: 56, fontWeight: 600, color: BRAND.white }}
+                      className="bg-transparent outline-none"
+                      style={{
+                        fontSize: 56, fontWeight: 600, color: BRAND.white,
+                        textAlign: "center", width: "60%", minWidth: 120,
+                      }}
                       autoFocus
                     />
                     <span style={{ color: BRAND.lime, fontSize: 18 }}>{unit}</span>
@@ -895,8 +908,12 @@
         const inc = () => setOccupancy(Math.min(8, occupancy + 1));
 
         return (
-          <div className="animate-fadeIn">
-            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
+          <div className="animate-fadeIn" style={{ textAlign: "center" }}>
+            <button
+              onClick={onBack}
+              className="text-sm"
+              style={{ color: BRAND.lime, display: "block", margin: "0 auto 16px" }}
+            >
               ← Back
             </button>
 
@@ -972,7 +989,7 @@
         return (
           <div className="animate-fadeIn">
             {isZero ? (
-              <>
+              <div style={{ textAlign: "center" }}>
                 <h1 style={{
                   fontSize: 32, fontWeight: 700, color: BRAND.white,
                   lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 8,
@@ -982,16 +999,19 @@
                 <p style={{ color: BRAND.muted, fontSize: 15, marginBottom: 24 }}>
                   You travelled {distanceLabel} {description}. Not a gram of CO₂.
                 </p>
-              </>
+              </div>
             ) : (
-              <>
+              <div style={{ textAlign: "center" }}>
                 <p style={{
                   color: BRAND.lime, fontSize: 11, fontWeight: 700,
                   letterSpacing: "0.15em", marginBottom: 6,
                 }}>
                   YOUR JOURNEY
                 </p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                <div style={{
+                  display: "flex", alignItems: "baseline", gap: 8,
+                  marginBottom: 8, justifyContent: "center",
+                }}>
                   <span style={{
                     fontSize: 48, fontWeight: 700, color: BRAND.white,
                     lineHeight: 1, letterSpacing: "-0.03em",
@@ -1006,7 +1026,7 @@
                   per person, {distanceLabel}
                   {originLabel && ` from ${originLabel}`} {description}
                 </p>
-              </>
+              </div>
             )}
 
             {!isZero && (
@@ -1075,7 +1095,7 @@
       // ============================================================================
       function ScreenFollowup({ onYes, onNo }) {
         return (
-          <div className="animate-fadeIn">
+          <div className="animate-fadeIn" style={{ textAlign: "center" }}>
             <p style={{
               color: BRAND.lime, fontSize: 11, fontWeight: 700,
               letterSpacing: "0.15em", marginBottom: 6,
@@ -1093,7 +1113,7 @@
               footprint. No spam, ever.
             </p>
 
-            <div className="space-y-3">
+            <div className="space-y-3" style={{ textAlign: "left" }}>
               <BigChoiceButton onClick={onYes} primary>
                 <span style={{ fontSize: 28 }}>📩</span>
                 <div>
@@ -1191,25 +1211,31 @@
 
         return (
           <div className="animate-fadeIn">
-            <button onClick={onBack} className="mb-4 text-sm" style={{ color: BRAND.lime }}>
+            <button
+              onClick={onBack}
+              className="text-sm"
+              style={{ color: BRAND.lime, display: "block", margin: "0 auto 16px", textAlign: "center" }}
+            >
               ← Back
             </button>
 
-            <p style={{
-              color: BRAND.lime, fontSize: 11, fontWeight: 700,
-              letterSpacing: "0.15em", marginBottom: 6,
-            }}>
-              YOUR DETAILS
-            </p>
-            <h1 style={{
-              fontSize: 28, fontWeight: 700, color: BRAND.white,
-              lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: 12,
-            }}>
-              Where shall we send it?
-            </h1>
-            <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
-              Just an email is enough — name and company are optional.
-            </p>
+            <div style={{ textAlign: "center" }}>
+              <p style={{
+                color: BRAND.lime, fontSize: 11, fontWeight: 700,
+                letterSpacing: "0.15em", marginBottom: 6,
+              }}>
+                YOUR DETAILS
+              </p>
+              <h1 style={{
+                fontSize: 28, fontWeight: 700, color: BRAND.white,
+                lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: 12,
+              }}>
+                Where shall we send it?
+              </h1>
+              <p style={{ color: BRAND.muted, fontSize: 14, marginBottom: 24 }}>
+                Just an email is enough — name and company are optional.
+              </p>
+            </div>
 
             <div className="space-y-3 mb-4">
               <DetailInput value={name} onChange={setName} placeholder="Name (optional)" autoComplete="name" />
