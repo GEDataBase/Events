@@ -1002,12 +1002,12 @@
             {!isZero && (
               <Card>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                  <Stat label="Total" value={totalKg.toFixed(2)} unit="kg" />
+                  <Stat label="Total" value={totalKg.toFixed(2)} unit="kg CO₂e" />
                   {needsOccupancy && (
                     <Stat
                       label="Per person"
                       value={perPersonKg.toFixed(2)}
-                      unit="kg"
+                      unit="kg CO₂e"
                       highlight
                       align="right"
                     />
@@ -1339,8 +1339,8 @@
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <MiniStat label="Train" value={railKg.toFixed(2)} unit="kg" />
-              <MiniStat label="Bus" value={busKg.toFixed(2)} unit="kg" />
+              <MiniStat label="Train" value={railKg.toFixed(2)} unit="kg CO₂e" />
+              <MiniStat label="Bus" value={busKg.toFixed(2)} unit="kg CO₂e" />
             </div>
 
             {saving > 0 && (
