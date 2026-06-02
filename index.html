@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#00544F" />
+    <title>Greener Edge</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --brand-dark: #00544F;
+        --brand-dark-alt: #003E3A;
+        --brand-lime: #85BE00;
+        --brand-lime-dark: #6FA000;
+        --brand-cream: #f5f1e8;
+        --brand-muted: #8FB4B0;
+      }
+
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+      html, body {
+        margin: 0; padding: 0;
+        width: 100%; min-height: 100vh;
+        background-color: var(--brand-dark);
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        color: #fff;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 40px 32px 32px;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      .header {
+        display: flex;
+        justify-content: center;
+        margin-bottom: clamp(32px, 6vh, 80px);
+      }
+      .logo {
+        height: clamp(56px, 9vh, 96px);
+        width: auto;
+        display: block;
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: clamp(28px, 5vh, 56px);
+      }
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        color: var(--brand-lime);
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      .title {
+        font-size: clamp(28px, 5vw, 44px);
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+      }
+      .subtitle {
+        font-size: clamp(14px, 1.6vw, 17px);
+        color: var(--brand-muted);
+        max-width: 540px;
+        margin: 0 auto;
+        line-height: 1.5;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        flex: 1;
+        align-content: center;
+      }
+      @media (max-width: 720px) {
+        .cards { grid-template-columns: 1fr; }
+      }
+
+      .card {
+        position: relative;
+        background-color: var(--brand-cream);
+        border-radius: 24px;
+        padding: clamp(28px, 4vw, 44px);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: clamp(20px, 3vh, 36px);
+        min-height: clamp(280px, 38vh, 380px);
+        text-align: left;
+        text-decoration: none;
+        color: inherit;
+        border: 2px solid transparent;
+        box-shadow:
+          0 4px 14px -4px rgba(0,0,0,0.25),
+          0 16px 32px -16px rgba(0,0,0,0.3);
+        transition:
+          transform 0.25s ease,
+          border-color 0.25s ease,
+          box-shadow 0.25s ease;
+        overflow: hidden;
+      }
+      .card:hover, .card:active {
+        transform: translateY(-3px);
+        border-color: var(--brand-lime);
+        box-shadow:
+          0 8px 20px -4px rgba(0,0,0,0.3),
+          0 24px 48px -16px rgba(0,0,0,0.4);
+      }
+      .card:active { transform: translateY(-1px); }
+
+      /* Decorative lime corner accent */
+      .card::after {
+        content: "";
+        position: absolute;
+        top: -40px;
+        right: -40px;
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        background-color: var(--brand-lime);
+        opacity: 0.1;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+      .card:hover::after, .card:active::after {
+        opacity: 0.18;
+        transform: scale(1.15);
+      }
+
+      .card-icon {
+        font-size: clamp(56px, 7vw, 76px);
+        line-height: 1;
+        transition: transform 0.3s ease;
+      }
+      .card:hover .card-icon, .card:active .card-icon {
+        transform: scale(1.08) rotate(-4deg);
+      }
+
+      .card-text { position: relative; z-index: 1; }
+      .card-eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: var(--brand-lime-dark);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .card-title {
+        font-size: clamp(22px, 2.8vw, 30px);
+        font-weight: 700;
+        color: var(--brand-dark);
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin: 0 0 6px;
+      }
+      .card-subtitle {
+        font-size: clamp(13px, 1.4vw, 15px);
+        color: #5a6650;
+        line-height: 1.45;
+        margin: 0;
+      }
+      .card-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--brand-dark);
+        letter-spacing: -0.01em;
+        margin-top: 12px;
+        transition: gap 0.25s ease;
+      }
+      .card:hover .card-cta, .card:active .card-cta {
+        gap: 14px;
+      }
+      .card-cta-arrow {
+        color: var(--brand-lime-dark);
+        font-size: 18px;
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 32px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        color: var(--brand-muted);
+        opacity: 0.7;
+      }
+
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .header { animation: fadeUp 0.5s ease backwards; }
+      .hero   { animation: fadeUp 0.5s ease 0.1s backwards; }
+      .card:nth-child(1) { animation: fadeUp 0.5s ease 0.2s backwards; }
+      .card:nth-child(2) { animation: fadeUp 0.5s ease 0.3s backwards; }
+      .footer { animation: fadeUp 0.5s ease 0.4s backwards; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <img src="logo.png" alt="Greener Edge Sustainability" class="logo" />
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow">Welcome</p>
+        <h1 class="title">Pick what you'd like to do</h1>
+        <p class="subtitle">
+          Calculate your travel footprint in under a minute, or take a look
+          at the work we do.
+        </p>
+      </section>
+
+      <main class="cards">
+        <a class="card" href="calculator.html" id="calcCard">
+          <div class="card-icon">🌱</div>
+          <div class="card-text">
+            <p class="card-eyebrow">INTERACTIVE</p>
+            <h2 class="card-title">Carbon Calculator</h2>
+            <p class="card-subtitle">
+              Find out the CO₂ footprint of your journey to today's event —
+              and what you could save by travelling differently.
+            </p>
+            <span class="card-cta">
+              Start now <span class="card-cta-arrow">→</span>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="kiosk.html" id="kioskCard">
+          <div class="card-icon">🎬</div>
+          <div class="card-text">
+            <p class="card-eyebrow">OUR WORK</p>
+            <h2 class="card-title">Greener Edge Showcase</h2>
+            <p class="card-subtitle">
+              See how we help businesses across the UK measure, reduce, and
+              report on their carbon footprint.
+            </p>
+            <span class="card-cta">
+              Have a look <span class="card-cta-arrow">→</span>
+            </span>
+          </div>
+        </a>
+      </main>
+
+      <footer class="footer">
+        GIVING YOU A GREENER EDGE
+      </footer>
+    </div>
+
+    <script>
+      /*
+       * On card tap: attempt fullscreen, then navigate.
+       * The Fullscreen API requires a direct user gesture, so we trigger
+       * it inside the click handler before navigation.
+       *
+       * Note: iPhone Safari doesn't support the Fullscreen API. The call
+       * silently fails there. On iPad Safari it works. For best results
+       * at the event, install the page with "Add to Home Screen" — that
+       * provides a real chromeless fullscreen regardless of the API.
+       */
+      function goTo(url) {
+        try {
+          const el = document.documentElement;
+          const req =
+            el.requestFullscreen ||
+            el.webkitRequestFullscreen ||
+            el.webkitRequestFullScreen ||
+            el.msRequestFullscreen;
+          if (req) {
+            const p = req.call(el);
+            if (p && typeof p.catch === "function") p.catch(() => {});
+          }
+        } catch (e) { /* silent */ }
+        setTimeout(() => { window.location.href = url; }, 80);
+      }
+
+      document.getElementById("calcCard").addEventListener("click", (e) => {
+        e.preventDefault();
+        goTo("calculator.html");
+      });
+      document.getElementById("kioskCard").addEventListener("click", (e) => {
+        e.preventDefault();
+        goTo("kiosk.html");
+      });
+    </script>
+  </body>
+</html>
