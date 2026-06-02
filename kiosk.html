@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#00544F" />
+    <title>Greener Edge — Kiosk Display</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ==================================================================
+         CARBON CALCULATOR — KIOSK CAROUSEL
+         For iPad use at events. Full-screen, auto-rotating.
+         ================================================================== */
+
+      :root {
+        --brand-dark: #00544F;
+        --brand-lime: #85BE00;
+        --brand-cream: #f5f1e8;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        color: #fff;
+        overflow: hidden;
+        /* Prevent iOS Safari from showing the address bar */
+        position: fixed;
+        inset: 0;
+        -webkit-font-smoothing: antialiased;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      /* ====== Stage (full viewport) ====== */
+      .stage {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background-color: var(--brand-dark);
+      }
+
+      /* ====== Each slide ====== */
+      .slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 1.2s ease;
+        pointer-events: none;
+      }
+      .slide.active {
+        opacity: 1;
+        pointer-events: auto;
+        z-index: 2;
+      }
+
+      /* ====== Image with Ken Burns zoom ====== */
+      .slide-media {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform-origin: center center;
+      }
+      .slide.active img.slide-media {
+        animation: kenburns 12s ease-in-out forwards;
+      }
+      @keyframes kenburns {
+        0%   { transform: scale(1.0); }
+        100% { transform: scale(1.12); }
+      }
+
+      /* Videos cover the screen too */
+      video.slide-media {
+        object-fit: cover;
+      }
+
+      /* ====== Bottom caption bar ====== */
+      .caption-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 32px 56px 36px;
+        background: linear-gradient(
+          to top,
+          rgba(0, 0, 0, 0.88) 0%,
+          rgba(0, 0, 0, 0.65) 60%,
+          rgba(0, 0, 0, 0) 100%
+        );
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .caption-text {
+        font-size: clamp(20px, 2.4vw, 32px);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+        color: #fff;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+        max-width: 85%;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.6s ease 0.3s, transform 0.6s ease 0.3s;
+      }
+      .slide.active .caption-text {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* Small eyebrow tag above the caption */
+      .caption-eyebrow {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        color: var(--brand-lime);
+        text-transform: uppercase;
+        opacity: 0;
+        transition: opacity 0.6s ease 0.2s;
+      }
+      .slide.active .caption-eyebrow {
+        opacity: 1;
+      }
+
+      /* ====== Progress dots ====== */
+      .dots {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 10;
+      }
+      .dot {
+        width: 28px;
+        height: 4px;
+        border-radius: 999px;
+        background-color: rgba(255,255,255,0.25);
+        cursor: pointer;
+        transition: background-color 0.3s ease, width 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .dot.active {
+        background-color: rgba(255,255,255,0.25);
+        width: 56px;
+      }
+      .dot.active::after {
+        /* progress fill inside the active dot */
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-color: var(--brand-lime);
+        transform-origin: left center;
+        animation: dotFill var(--slide-duration, 8s) linear forwards;
+      }
+      @keyframes dotFill {
+        from { transform: scaleX(0); }
+        to   { transform: scaleX(1); }
+      }
+
+      /* ====== Side arrows ====== */
+      .arrow {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background-color: rgba(0,0,0,0.35);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #fff;
+        font-size: 28px;
+        cursor: pointer;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.3s ease, background-color 0.2s ease, transform 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stage:hover .arrow,
+      .stage:active .arrow,
+      .stage.show-controls .arrow {
+        opacity: 0.8;
+      }
+      .arrow:hover {
+        background-color: rgba(0,0,0,0.55);
+        opacity: 1 !important;
+      }
+      .arrow:active {
+        transform: translateY(-50%) scale(0.94);
+      }
+      .arrow.left  { left: 32px; }
+      .arrow.right { right: 32px; }
+
+      /* On iPad we want the arrows always visible since there's no hover */
+      @media (hover: none) {
+        .arrow {
+          opacity: 0.65;
+        }
+      }
+
+      /* ====== Loading state ====== */
+      .loader {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--brand-dark);
+        z-index: 100;
+        transition: opacity 0.5s ease;
+      }
+      .loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loader-spinner {
+        width: 48px;
+        height: 48px;
+        border: 3px solid rgba(133,190,0,0.2);
+        border-top-color: var(--brand-lime);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ====== Subtle vignette overlay for cinematic feel ====== */
+      .vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            ellipse at center,
+            transparent 60%,
+            rgba(0,0,0,0.35) 100%
+          );
+        z-index: 3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+      </div>
+
+      <!-- Slides get injected here -->
+      <div id="slides"></div>
+
+      <div class="vignette"></div>
+
+      <!-- Navigation arrows -->
+      <button class="arrow left" id="prevBtn" aria-label="Previous slide">‹</button>
+      <button class="arrow right" id="nextBtn" aria-label="Next slide">›</button>
+
+      <!-- Progress dots -->
+      <div class="dots" id="dots"></div>
+    </div>
+
+    <script>
+      /* ==================================================================
+         CONFIG — edit this array to add, remove, or reorder slides.
+
+         Each entry needs:
+           - file:    the filename in the repo (case-sensitive)
+           - type:    "image" or "video"
+           - eyebrow: small label above caption (optional, can be "")
+           - caption: the main caption text
+
+         Order in this array = order of the slideshow.
+
+         When adding new files, drop them in the GitHub repo root
+         (same place as index.html and logo.png) and add a line here.
+         ================================================================== */
+      const SLIDES = [
+        {
+          file: "image1.jpg",
+          type: "image",
+          eyebrow: "OUR WORK",
+          caption: "Helping businesses cut emissions, year after year."
+        },
+        {
+          file: "image2.jpg",
+          type: "image",
+          eyebrow: "THE TEAM",
+          caption: "Sustainability specialists working across the UK."
+        },
+        {
+          file: "video1.mp4",
+          type: "video",
+          eyebrow: "WATCH",
+          caption: "What a Greener Edge audit looks like in practice."
+        },
+        {
+          file: "image3.jpg",
+          type: "image",
+          eyebrow: "CLIENT RESULTS",
+          caption: "Real reductions. Measurable savings. Reportable data."
+        },
+        // Add more slides below by copying the pattern above.
+      ];
+
+      // Image slide duration (milliseconds). Videos override this — they
+      // advance when they finish playing.
+      const IMAGE_DURATION_MS = 8000;
+
+      /* ==================================================================
+         Below this line is the carousel engine — no need to edit.
+         ================================================================== */
+
+      const slidesContainer = document.getElementById("slides");
+      const dotsContainer = document.getElementById("dots");
+      const loaderEl = document.getElementById("loader");
+      const stageEl = document.getElementById("stage");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+
+      let currentIndex = 0;
+      let slideTimer = null;
+      const slideEls = [];   // DOM nodes per slide
+      const videoEls = [];   // video element refs (or null) per slide
+
+      // ---- Build slides ----
+      function buildSlides() {
+        SLIDES.forEach((slide, i) => {
+          const slideEl = document.createElement("div");
+          slideEl.className = "slide";
+          slideEl.dataset.index = i;
+
+          let mediaEl;
+          if (slide.type === "video") {
+            mediaEl = document.createElement("video");
+            mediaEl.src = slide.file;
+            mediaEl.className = "slide-media";
+            mediaEl.muted = true;        // required for iOS autoplay
+            mediaEl.playsInline = true;  // required for iOS inline playback
+            mediaEl.setAttribute("playsinline", ""); // belt-and-braces for older Safari
+            mediaEl.preload = "auto";
+            mediaEl.controls = false;
+            videoEls[i] = mediaEl;
+          } else {
+            mediaEl = document.createElement("img");
+            mediaEl.src = slide.file;
+            mediaEl.className = "slide-media";
+            mediaEl.alt = slide.caption || "";
+            videoEls[i] = null;
+          }
+
+          // Caption bar
+          const captionBar = document.createElement("div");
+          captionBar.className = "caption-bar";
+
+          if (slide.eyebrow) {
+            const eyebrowEl = document.createElement("span");
+            eyebrowEl.className = "caption-eyebrow";
+            eyebrowEl.textContent = slide.eyebrow;
+            captionBar.appendChild(eyebrowEl);
+          }
+
+          if (slide.caption) {
+            const captionEl = document.createElement("div");
+            captionEl.className = "caption-text";
+            captionEl.textContent = slide.caption;
+            captionBar.appendChild(captionEl);
+          }
+
+          slideEl.appendChild(mediaEl);
+          slideEl.appendChild(captionBar);
+          slidesContainer.appendChild(slideEl);
+          slideEls.push(slideEl);
+
+          // Build dot for this slide
+          const dot = document.createElement("button");
+          dot.className = "dot";
+          dot.setAttribute("aria-label", "Go to slide " + (i + 1));
+          dot.addEventListener("click", () => goToSlide(i));
+          dotsContainer.appendChild(dot);
+        });
+      }
+
+      // ---- Show a slide (and hide all others) ----
+      function activateSlide(index) {
+        // Clear any pending advance
+        if (slideTimer) {
+          clearTimeout(slideTimer);
+          slideTimer = null;
+        }
+
+        // Pause and reset any currently-playing video
+        videoEls.forEach((v) => {
+          if (v) { try { v.pause(); v.currentTime = 0; } catch {} }
+        });
+
+        // Toggle active class
+        slideEls.forEach((el, i) => {
+          el.classList.toggle("active", i === index);
+        });
+        Array.from(dotsContainer.children).forEach((dot, i) => {
+          dot.classList.toggle("active", i === index);
+        });
+
+        currentIndex = index;
+
+        const slide = SLIDES[index];
+        if (slide.type === "video") {
+          const v = videoEls[index];
+          // For videos: start playback, advance when it ends.
+          // We set duration to a long fallback in case of error.
+          v.currentTime = 0;
+          const playPromise = v.play();
+          if (playPromise && playPromise.catch) {
+            playPromise.catch(() => {
+              // Autoplay failed (rare with muted + playsInline) —
+              // advance after a fallback timer so we don't get stuck.
+              slideTimer = setTimeout(next, 12000);
+            });
+          }
+          // When the video ends, move on
+          v.onended = () => next();
+          // Set the dot's progress fill to match the video duration
+          // when metadata is loaded
+          const updateDotDuration = () => {
+            if (v.duration && isFinite(v.duration)) {
+              dotsContainer.style.setProperty(
+                "--slide-duration",
+                v.duration + "s"
+              );
+            }
+          };
+          if (v.readyState >= 1) updateDotDuration();
+          else v.addEventListener("loadedmetadata", updateDotDuration, { once: true });
+        } else {
+          // Image slide — auto-advance after IMAGE_DURATION_MS
+          dotsContainer.style.setProperty(
+            "--slide-duration",
+            (IMAGE_DURATION_MS / 1000) + "s"
+          );
+          slideTimer = setTimeout(next, IMAGE_DURATION_MS);
+        }
+      }
+
+      function next() {
+        const newIndex = (currentIndex + 1) % SLIDES.length;
+        activateSlide(newIndex);
+      }
+      function prev() {
+        const newIndex = (currentIndex - 1 + SLIDES.length) % SLIDES.length;
+        activateSlide(newIndex);
+      }
+      function goToSlide(i) {
+        activateSlide(i);
+      }
+
+      // ---- Wire controls ----
+      prevBtn.addEventListener("click", prev);
+      nextBtn.addEventListener("click", next);
+
+      // Touch the screen to briefly show controls (handy on iPad)
+      let controlsTimeout = null;
+      function flashControls() {
+        stageEl.classList.add("show-controls");
+        clearTimeout(controlsTimeout);
+        controlsTimeout = setTimeout(() => {
+          stageEl.classList.remove("show-controls");
+        }, 3000);
+      }
+      stageEl.addEventListener("touchstart", flashControls, { passive: true });
+
+      // Keyboard arrows (handy when testing on desktop)
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") next();
+        else if (e.key === "ArrowLeft") prev();
+      });
+
+      // ---- Boot ----
+      buildSlides();
+
+      // Wait for the first slide's media to be ready before starting,
+      // so we don't show a black flash on load.
+      function startWhenReady() {
+        const firstMedia = slideEls[0]?.querySelector(".slide-media");
+        if (!firstMedia) return;
+
+        const startNow = () => {
+          loaderEl.classList.add("hidden");
+          activateSlide(0);
+        };
+
+        if (firstMedia.tagName === "IMG") {
+          if (firstMedia.complete) startNow();
+          else {
+            firstMedia.addEventListener("load", startNow, { once: true });
+            firstMedia.addEventListener("error", startNow, { once: true });
+          }
+        } else {
+          // Video — wait for canplay or fallback after 3s
+          if (firstMedia.readyState >= 3) startNow();
+          else {
+            firstMedia.addEventListener("canplay", startNow, { once: true });
+            firstMedia.addEventListener("error", startNow, { once: true });
+            setTimeout(startNow, 3000);
+          }
+        }
+      }
+
+      // Preload all videos to reduce delay when the carousel reaches them
+      videoEls.forEach((v) => { if (v) v.load(); });
+
+      startWhenReady();
+    </script>
+  </body>
+</html>
