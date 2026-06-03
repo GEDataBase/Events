@@ -228,6 +228,38 @@
         }
       }
 
+      /* ====== Home / back-to-menu button (top-left) ====== */
+      /* Kept gently visible at all times so visitors can always find
+         their way back to the main menu, unlike the arrows which fade. */
+      .home-btn {
+        position: absolute;
+        top: 24px;
+        left: 32px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background-color: rgba(0,0,0,0.35);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #fff;
+        text-decoration: none;
+        z-index: 10;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.65;
+        transition: opacity 0.3s ease, background-color 0.2s ease, transform 0.2s ease;
+      }
+      .home-btn:hover {
+        background-color: rgba(0,0,0,0.55);
+        opacity: 1;
+      }
+      .home-btn:active {
+        transform: scale(0.94);
+      }
+
       /* ====== Loading state ====== */
       .loader {
         position: absolute;
@@ -282,6 +314,14 @@
       <!-- Navigation arrows -->
       <button class="arrow left" id="prevBtn" aria-label="Previous slide">‹</button>
       <button class="arrow right" id="nextBtn" aria-label="Next slide">›</button>
+
+      <!-- Back to the main menu -->
+      <a class="home-btn" href="index.html" aria-label="Back to the main menu" title="Back to the main menu">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 11l9-8 9 8" />
+          <path d="M5 9.5V21h14V9.5" />
+        </svg>
+      </a>
 
       <!-- Progress dots -->
       <div class="dots" id="dots"></div>
