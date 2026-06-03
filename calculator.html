@@ -587,11 +587,18 @@
       function Header({ currentStep, totalSteps, showProgress }) {
         return (
           <header className="mb-6 flex items-center justify-between">
-            <img
-              src="logo.png"
-              alt="Greener Edge Sustainability"
-              style={{ height: 44, width: "auto", display: "block" }}
-            />
+            <a
+              href="index.html"
+              aria-label="Back to the main menu"
+              title="Back to the main menu"
+              style={{ display: "inline-block", lineHeight: 0 }}
+            >
+              <img
+                src="logo.png"
+                alt="Greener Edge Sustainability"
+                style={{ height: 44, width: "auto", display: "block", cursor: "pointer" }}
+              />
+            </a>
 
             {showProgress && (
               <div className="flex items-center gap-2 text-xs"
